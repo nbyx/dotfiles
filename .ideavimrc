@@ -2,7 +2,7 @@
 "source ~/.vimrc
 set visualbell
 set noerrorbells
--
+
 let mapleader = ","
 
 noremap <Leader>y "+y
