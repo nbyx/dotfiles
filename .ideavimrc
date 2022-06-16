@@ -33,18 +33,18 @@ map Q gq
 
 "" Map \b to toggle the breakpoint on the current line
 "map \b <Action>(ToggleLineBreakpoint)
-nnoremap <Leader>vc :action Vcs.QuickListPopupAction<CR>
+nnoremap <Leader>vc <Action> Vcs.QuickListPopupAction<CR>
 
 " Find more examples here: https://jb.gg/share-ideavimrc
 " fix actions
-nnoremap <Leader>fc :action ReformatCode<CR>
-nnoremap <Leader>fi :action OptimizeImports<CR>
-nnoremap <Leader>fa :action ShowIntentionActions<CR><Esc>
+nnoremap <Leader>fc <Action> ReformatCode<CR>
+nnoremap <Leader>fi <Action> OptimizeImports<CR>
+nnoremap <Leader>fa <Action> ShowIntentionActions<CR><Esc>
 
 " navigation ans search
-nnoremap <Leader>su :action ShowUsages<CR>
-nnoremap <Leader>sU :action FindUsages<CR>
-nnoremap <Leader>si :action GotoImplementation<CR>
-nnoremap <Leader>ss :action GotoSuperMethod<CR>
-nnoremap <Leader>sd :action QuickImplementations<CR>
-nnoremap <Leader>st :action GotoTypeDeclaration<CR>
+nnoremap <Leader>su <Action> ShowUsages<CR>
+nnoremap <Leader>sU <Action> FindUsages<CR>
+nnoremap <Leader>si <Action> GotoImplementation<CR>
+nnoremap <Leader>ss <Action> GotoSuperMethod<CR>
+nnoremap <Leader>sd <Action> QuickImplementations<CR>
+nnoremap <Leader>st <Action> GotoTypeDeclaration<CR>
