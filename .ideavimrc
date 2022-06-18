@@ -1,5 +1,11 @@
 "" Source your .vimrc
 "source ~/.vimrc
+
+" turn hybrid line numbers on
+set number relativenumber
+set nu rnu
+
+" turn off error bells
 set visualbell
 set noerrorbells
 
