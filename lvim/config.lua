@@ -21,3 +21,4 @@ lvim.builtin.which_key.mappings["t"] = {
 lvim.plugins = {
   { "lunarvim/colorschemes" },
 }
+
