@@ -1,6 +1,6 @@
 "" .ideavimrc - Marcel W.
 " Note: Ensure the corresponding plugins are installed and available in your environment.
-" Plugins needed: NERDTree, Which-Key
+" Plugins needed: Which-Key
 
 "" Source your .vimrc
 "source ~/.vimrc
