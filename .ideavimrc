@@ -1,6 +1,6 @@
 "" .ideavimrc - Marcel W.
 " Note: Ensure the corresponding plugins are installed and available in your environment.
-" Plugins needed: Which-Key
+" Plugins needed: Which-Key, idea-sneak
 
 "" Source your .vimrc
 "source ~/.vimrc
@@ -10,6 +10,8 @@ set scrolloff=10
 set number
 set showmode
 set showcmd
+set ideajoin
+set scroll=20
 
 set visualbell
 
@@ -17,6 +19,7 @@ set visualbell
 set clipboard+=unnamed
 
 " Search Improvements
+set sneak
 set ignorecase
 set smartcase
 set incsearch
@@ -83,8 +86,8 @@ nnoremap gI :action GotoImplementation<CR>
 let g:WhichKeyDesc_gI = "gI Go to Implementation"
 nnoremap gs :ShowSignatureHelp<CR>
 let g:WhichKeyDesc_gs = "gs Show Signature Help"
-nnoremap gl :ShowLineDiagnostics<CR>
-let g:WhichKeyDesc_gl = "gl Show Line Diagnostics"
+nnoremap ge :action ShowErrorDescription<CR>
+let g:WhichKeyDesc_ge = "ge Show Error Description"
 nnoremap gy :action GotoTypeDeclaration<CR>
 let g:WhichKeyDesc_gy = "gy Go to Type Declaration"
 nnoremap gu :action ShowUsages<CR>
@@ -111,17 +114,18 @@ let g:WhichKeyDesc_gu = "<leader>gu Update Project"
 map <leader>gq <Action>(Vcs.QuickListPopupAction)
 let g:WhichKeyDesc_gq = "<leader>gq QuickListPopupAction"
 map <leader>gl <Action>(LocalHistory.ShowHistory)
-let g:WhichKeyDesc_gl = "<leader>gl Show Local History"
+let g:WhichKeyDesc_gl = "<leader>gl QuickListPopupAction"
 
 " Buffer navigation
 let g:WhichKeyDesc_b = "<Space>b Buffer"
-map <leader>bb :Buffers<CR>
-let g:WhichKeyDesc_bb = "<leader>bb List Buffers"
 map <leader>bn :bnext<CR>
 let g:WhichKeyDesc_bn = "<leader>bn Next Buffer"
 map <leader>bp :bprevious<CR>
 let g:WhichKeyDesc_bp = "<leader>bp Previous Buffer"
-
+map <leader>ba :action CloseAllEditorsButActive<CR>
+let g:WhichKeyDesc_ba = "<leader>ba Close all but active"
+map <leader>bc <action>(CloseContent)
+let g:WhichKeyDesc_bc = "<leader>bc Close Active Buffer"
 " Actions
 let g:WhichKeyDesc_a = "<Space>a Actions"
 map <leader>am <action>(ShowIntentionActions)
@@ -130,10 +134,11 @@ map <leader>af :action ReformatCode<CR>
 let g:WhichKeyDesc_af = "<leader>af Reformat Code"
 
 " Editing (Commenting, Moving Lines)
-nnoremap <M-k> :MoveLineUp<CR>
-nnoremap <M-j> :MoveLineDown<CR>
+" M is ALT or OPTION key
+nnoremap <M-k> :action MoveLineUp<CR>
+nnoremap <M-j> :action MoveLineDown<CR>
 let g:WhichKeyDesc_ = "<leader>/ Comment Line/Toggle"
-map <leader>/ :CommentToggle<CR>
+map <leader>/ :action CommentByLineComment<CR>
 
 " Telescope equivalent (Find files, grep text, and more)
 let g:WhichKeyDesc_f = "<leader>f Search Menu"
@@ -200,25 +205,6 @@ let g:WhichKeyDesc_ii = "<leader>ii Inspect Code"
 nnoremap <leader>it :action> ActivateTODOToolWindow<CR>
 let g:WhichKeyDesc_it = "<leader>it Show TODOs"
 
-" Window Navigation
-let g:WhichKeyDesc_w = "<Space>w Window Management"
-nnoremap <C-h> <C-w>h
-nnoremap <C-j> <C-w>j
-nnoremap <C-k> <C-w>k
-nnoremap <C-l> <C-w>l
-nnoremap <C-Up> :resize -2<CR>
-nnoremap <C-Down> :resize +2<CR>
-nnoremap <C-Left> :vertical resize -2<CR>
-nnoremap <C-Right> :vertical resize +2<CR>
-map <leader>wv <Action>(SplitVertically)
-let g:WhichKeyDesc_wv = "<leader>wv Split Vertically"
-map <leader>ws <Action>(SplitHorizontally)
-let g:WhichKeyDesc_ws = "<leader>ws Split Horizontally"
-map <leader>wu <Action>(Unsplit)
-let g:WhichKeyDesc_wu = "<leader>wu Remove Split"
-map <leader>wm <Action>(MoveEditorToOppositeTabGroup)
-let g:WhichKeyDesc_wm = "<leader>wm Move to Other Tab Group"
-
 " Refactoring bindings
 let g:WhichKeyDesc_r = "<Space>r Refactoring"
 map <leader>rn <Action>(RenameElement)
@@ -249,10 +235,6 @@ map <leader>dz <action>(ToggleZenMode)
 let g:WhichKeyDesc_dz = "<leader>dz Toggle Zen Mode"
 map <leader>df <action>(ToggleFullScreen)
 let g:WhichKeyDesc_df = "<leader>df Toggle Full Screen"
-
-" Close active buffer
-let g:WhichKeyDesc_q = "<leader>q Close Active Tab"
-map <leader>q <action>(CloseContent)
 
 " Config options
 let g:WhichKeyDesc_v = "<Space>v Config Options"
@@ -263,14 +245,6 @@ let g:WhichKeyDesc_vr = "<leader>vr Reload .ideavimrc"
 
 " Window Navigation
 let g:WhichKeyDesc_w = "<Space>w Window Management"
-nnoremap <C-h> <C-w>h
-nnoremap <C-j> <C-w>j
-nnoremap <C-k> <C-w>k
-nnoremap <C-l> <C-w>l
-nnoremap <C-Up> :resize -2<CR>
-nnoremap <C-Down> :resize +2<CR>
-nnoremap <C-Left> :vertical resize -2<CR>
-nnoremap <C-Right> :vertical resize +2<CR>
 map <leader>wv <Action>(SplitVertically)
 let g:WhichKeyDesc_wv = "<leader>wv Split Vertically"
 map <leader>ws <Action>(SplitHorizontally)
@@ -310,10 +284,6 @@ map <leader>dz <action>(ToggleZenMode)
 let g:WhichKeyDesc_dz = "<leader>dz Toggle Zen Mode"
 map <leader>df <action>(ToggleFullScreen)
 let g:WhichKeyDesc_df = "<leader>df Toggle Full Screen"
-
-" Close active buffer
-let g:WhichKeyDesc_q = "<leader>q Close Active Tab"
-map <leader>q <action>(CloseContent)
 
 " Config options
 let g:WhichKeyDesc_v = "<Space>v Config Options"
