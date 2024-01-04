@@ -1,53 +1,109 @@
+"" .ideavimrc - Marcel W.
+" Note: Ensure the corresponding plugins are installed and available in your environment.
+" Plugins needed: NERDTree, Which-Key
+
 "" Source your .vimrc
 "source ~/.vimrc
 
-" turn hybrid line numbers on
-set number relativenumber
-set nu rnu
-
-" turn off error bells
+" General Settings
+set scrolloff=10
+set number
+set showmode
+set showcmd
 set visualbell
-set noerrorbells
+set clipboard+=unnamed
 
-let mapleader = ","
-
-noremap <Leader>y "+y
-noremap <Leader>p "+p
-noremap <Leader>Y "*Y
-noremap <Leader>P "*P
-
-"" -- Suggested options --
-" Show a few lines of context around the cursor. Note that this makes the
-" text scroll if you mouse-click near the start or end of the window.
-set scrolloff=5
-
-" Do incremental searching.
+" Search Improvements
+set ignorecase
+set smartcase
 set incsearch
+set hlsearch
 
-" Don't use Ex mode, use Q for formatting.
-map Q gq
+" Leader Key Assignment
+let mapleader = " "
 
-"" -- Map IDE actions to IdeaVim -- https://jb.gg/abva4t
-"" Map \r to the Reformat Code action
-"map \r <Action>(ReformatCode)
+" Surround
+set surround
 
-"" Map <leader>d to start debug
-"map <leader>d <Action>(Debug)
+" Highlighted Yank
+set highlightedyank
 
-"" Map \b to toggle the breakpoint on the current line
-"map \b <Action>(ToggleLineBreakpoint)
-nnoremap <Leader>vc <Action> Vcs.QuickListPopupAction<CR>
+" NERDTree
+set nerdtree
 
-" Find more examples here: https://jb.gg/share-ideavimrc
-" fix actions
-nnoremap <Leader>fc <Action> ReformatCode<CR>
-nnoremap <Leader>fi <Action> OptimizeImports<CR>
-nnoremap <Leader>fa <Action> ShowIntentionActions<CR><Esc>
+" Which-Key
+set which-key
 
-" navigation ans search
-nnoremap <Leader>su <Action> ShowUsages<CR>
-nnoremap <Leader>sU <Action> FindUsages<CR>
-nnoremap <Leader>si <Action> GotoImplementation<CR>
-nnoremap <Leader>ss <Action> GotoSuperMethod<CR>
-nnoremap <Leader>sd <Action> QuickImplementations<CR>
-nnoremap <Leader>st <Action> GotoTypeDeclaration<CR>
+" Custom Keybindings
+
+" NERDTree Toggle (File Explorer)
+map <leader>e :NERDTreeToggle<CR>
+
+" Telescope equivalent (Find files, grep text, and more)
+" Note: Define or install a plugin that mimics Telescope's functionality
+map <leader>ff :FindFiles<CR>
+map <leader>fg :GrepText<CR>
+
+" Toggle Terminal
+" Replace with the actual command to toggle terminal in your IDE or Vim setup
+nnoremap <leader>t :ToggleTerminal<CR>
+
+" LSP Keybindings
+" Adjust these according to the LSP functionalities available in your IDE
+nnoremap K :ShowHover<CR>
+nnoremap gd :GoToDefinition<CR>
+nnoremap gr :GoToReferences<CR>
+" ... and so on for other LSP features
+
+" Editing (Commenting, Moving Lines)
+" Use commenting functionality or plugin
+map <leader>/ :CommentToggle<CR>
+" Moving lines - might require additional scripting or plugin
+nnoremap <M-k> :MoveLineUp<CR>
+nnoremap <M-j> :MoveLineDown<CR>
+
+" Window Navigation
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" Custom Leader Commands
+map <leader>c <action>(CommentByLineComment)
+map <leader>j <Plug>(easymotion-s)
+map <leader>x :NERDTreeToggle<CR>
+map <leader>zc :action CollapseAllRegions<CR>
+map <leader>zo :action ExpandAllRegions<CR>
+map <leader>wv <Action>(SplitVertically)
+map <leader>ws <Action>(SplitHorizontally)
+map <leader>wu <Action>(Unsplit)
+map <leader>wm <Action>(MoveEditorToOppositeTabGroup)
+map <leader>dd <action>(ToggleDistractionFreeMode)
+map <leader>dz <action>(ToggleZenMode)
+map <leader>df <action>(ToggleFullScreen)
+map <leader>am <action>(ShowIntentionActions)
+map <leader>as <action>(SearchEverywhere)
+map <leader>ff <action>(GotoFile)
+map <leader>fr <action>(RecentFiles)
+map <leader>fc <action>(FindInPath)
+map <leader>fl <action>(RecentLocations)
+map <leader>fs <action>(NewScratchFile)
+map <leader>q <action>(CloseContent)
+map <leader>rn <Action>(RenameElement)
+map <leader>rm <Action>(ExtractMethod)
+map <leader>rv <Action>(IntroduceVariable)
+map <leader>rf <Action>(IntroduceField)
+map <leader>rs <Action>(ChangeSignature)
+map <leader>rr <Action>(Refactorings.QuickListPopupAction)
+nmap <leader>gd <Action>(GotoDeclaration)
+nmap <leader>gy <Action>(GotoTypeDeclaration)
+nmap <leader>gi <Action>(GotoImplementation)
+nmap <leader>gu <Action>(ShowUsages)
+nmap <leader>gt <Action>(GotoTest)
+nmap <leader>gf <Action>(Back)
+nmap <leader>gb <Action>(Forward)
+map <leader>gc <Action>(CheckinProject)
+map <leader>gs <Action>(ActivateVersionControlToolWindow)
+map <leader>gb <Action>(Git.Branches)
+map <leader>en <Action>(ReSharperGotoNextErrorInSolution)
+map <leader>ep <Action>(ReSharperGotoPrevErrorInSolution)
