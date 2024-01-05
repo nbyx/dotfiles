@@ -28,6 +28,16 @@ set hlsearch
 " Leader Key Assignment
 let mapleader = " "
 
+" esc remapping
+nnoremap jk <esc>         " Remap in Normal mode
+inoremap jk <esc>         " Remap in Insert and Replace mode
+vnoremap jk <esc>         " Remap in Visual and Select mode
+xnoremap jk <esc>         " Remap in Visual mode
+snoremap jk <esc>         " Remap in Select mode
+cnoremap jk <C-C>         " Remap in Command-line mode
+onoremap jk <esc>         " Remap in Operator pending
+
+
 " Surround
 set surround
 
