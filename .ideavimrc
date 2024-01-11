@@ -33,6 +33,20 @@ let mapleader = " "
 inoremap kj <esc>
 vnoremap kj <esc>
 
+" center line on pageup and pagedown
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
+
+" center line on search
+nnoremap n nzz
+nnoremap N Nzz
+
+" movement in insert mode
+inoremap <C-h> <Left>
+inoremap <C-l> <Right>
+inoremap <C-j> <Down>
+inoremap <C-k> <Up>
+
 " Surround
 set surround
 
