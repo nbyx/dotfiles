@@ -30,14 +30,8 @@ set hlsearch
 let mapleader = " "
 
 " esc remapping
-nnoremap kj <esc>         " Remap in Normal mode
-inoremap kj <esc>         " Remap in Insert and Replace mode
-vnoremap kj <esc>         " Remap in Visual and Select mode
-xnoremap kj <esc>         " Remap in Visual mode
-snoremap kj <esc>         " Remap in Select mode
-cnoremap kj <C-C>         " Remap in Command-line mode
-onoremap kj <esc>         " Remap in Operator pending
-
+inoremap kj <esc>
+vnoremap kj <esc>
 
 " Surround
 set surround
