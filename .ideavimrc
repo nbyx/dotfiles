@@ -66,6 +66,8 @@ set notimeout
 let g:WhichKeyDesc_a = "<Space>a Actions"
 map <leader>am <action>(ShowIntentionActions)
 let g:WhichKeyDesc_am = "<leader>am Show Actions Menu"
+map <leader>af :action ReformatCode<CR>
+let g:WhichKeyDesc_af = "<leader>af Reformat Code"
 
 " Editing (Commenting, Moving Lines)
 nnoremap <M-k> :MoveLineUp<CR>
@@ -87,34 +89,6 @@ map <leader>fl <action>(RecentLocations)
 let g:WhichKeyDesc_fl = "<leader>fl Recent Locations"
 map <leader>fs <action>(SearchEverywhere)
 let g:WhichKeyDesc_fs = "<leader>fs Search Everywhere"
-
-" Toggle Terminal
-let g:WhichKeyDesc_t = "<leader>t Show Terminal"
-nnoremap <leader>t :action ActivateTerminalToolWindow<CR>
-
-" LSP Keybindings
-nnoremap <leader>K :action ShowHoverInfo<CR>
-let g:WhichKeyDesc_K = "<leader>K Show Hover Information"
-nnoremap gd :action GotoDefinition<CR>
-let g:WhichKeyDesc_gd = "gd Go to Definition"
-nnoremap gD :action GotoDeclaration<CR>
-let g:WhichKeyDesc_gD = "gD Go to Declaration"
-nnoremap gr :action GotoReferences<CR>
-let g:WhichKeyDesc_gr = "gr Go to References"
-nnoremap gI :action GotoImplementation<CR>
-let g:WhichKeyDesc_gI = "gI Go to Implementation"
-nnoremap gs :ShowSignatureHelp<CR>
-let g:WhichKeyDesc_gs = "gs Show Signature Help"
-nnoremap ge :action ShowErrorDescription<CR>
-let g:WhichKeyDesc_ge = "ge Show Error Description"
-nnoremap gy :action GotoTypeDeclaration<CR>
-let g:WhichKeyDesc_gy = "gy Go to Type Declaration"
-nnoremap gu :action ShowUsages<CR>
-let g:WhichKeyDesc_gu = "gu Show Usages"
-nnoremap gt :action GotoTest<CR>
-let g:WhichKeyDesc_gt = "gt Go to Test"
-nnoremap gh :action HighlightUsagesInFile<CR>
-let g:WhichKeyDesc_gh = "gh Highlight usages in file"
 
 " Git
 let g:WhichKeyDesc_g = "<Space>g Git Commands"
@@ -145,32 +119,6 @@ map <leader>ba :action CloseAllEditorsButActive<CR>
 let g:WhichKeyDesc_ba = "<leader>ba Close all but active"
 map <leader>bc <action>(CloseContent)
 let g:WhichKeyDesc_bc = "<leader>bc Close Active Buffer"
-" Actions
-let g:WhichKeyDesc_a = "<Space>a Actions"
-map <leader>am <action>(ShowIntentionActions)
-let g:WhichKeyDesc_am = "<leader>am Show Actions Menu"
-map <leader>af :action ReformatCode<CR>
-let g:WhichKeyDesc_af = "<leader>af Reformat Code"
-
-" Editing (Commenting, Moving Lines)
-" M is ALT or OPTION key
-nnoremap <M-k> :action MoveLineUp<CR>
-nnoremap <M-j> :action MoveLineDown<CR>
-let g:WhichKeyDesc_ = "<leader>/ Comment Line/Toggle"
-map <leader>/ :action CommentByLineComment<CR>
-
-" Telescope equivalent (Find files, grep text, and more)
-let g:WhichKeyDesc_f = "<leader>f Search Menu"
-map <leader>ff <action>(GotoFile)
-let g:WhichKeyDesc_ff = "<leader>ff Find File"
-map <leader>fr <action>(RecentFiles)
-let g:WhichKeyDesc_fr = "<leader>fr Recent Files"
-map <leader>fc <action>(FindInPath)
-let g:WhichKeyDesc_fc = "<leader>fc Find in Files"
-map <leader>fl <action>(RecentLocations)
-let g:WhichKeyDesc_fl = "<leader>fl Recent Locations"
-map <leader>fs <action>(SearchEverywhere)
-let g:WhichKeyDesc_fs = "<leader>fs Search Everywhere"
 
 " Toggle Terminal
 let g:WhichKeyDesc_t = "<leader>t Show Terminal"
@@ -200,23 +148,6 @@ let g:WhichKeyDesc_gt = "gt Go to Test"
 nnoremap gg :action Generate<CR>
 let g:WhichKeyDesc_gg = "gg Generate Window"
 
-" Git
-let g:WhichKeyDesc_g = "<Space>g Git Commands"
-map <leader>gc <Action>(CheckinProject)
-let g:WhichKeyDesc_gc = "<leader>gc Git Commit"
-map <leader>gs <Action>(ActivateVersionControlToolWindow)
-let g:WhichKeyDesc_gs = "<leader>gs Git Status"
-map <leader>gb <Action>(Git.Branches)
-let g:WhichKeyDesc_gb = "<leader>gb Git Branches"
-map <leader>gp <Action>(Vcs.Push)
-let g:WhichKeyDesc_gp = "<leader>gp Git Push"
-map <leader>gf <Action>(Git.Fetch)
-let g:WhichKeyDesc_gf = "<leader>gf Fetch"
-map <leader>gu <Action>(Vcs.UpdateProject)
-let g:WhichKeyDesc_gu = "<leader>gu Update Project"
-map <leader>gq <Action>(Vcs.QuickListPopupAction)
-let g:WhichKeyDesc_gq = "<leader>gq QuickListPopupAction"
-
 " Inspect
 let g:WhichKeyDesc_i = "<leader>i Inspect Options"
 nnoremap <leader>ii :action InspectCode<CR>
@@ -239,29 +170,6 @@ let g:WhichKeyDesc_rs = "<leader>rs Change Signature"
 map <leader>rr <Action>(Refactorings.QuickListPopupAction)
 let g:WhichKeyDesc_rr = "<leader>rr Refactoring Menu"
 
-" Folding
-let g:WhichKeyDesc_z = "<Space>z Folding"
-map <leader>zc :action CollapseAllRegions<CR>
-let g:WhichKeyDesc_zc = "<leader>zc Collapse All Regions"
-map <leader>zo :action ExpandAllRegions<CR>
-let g:WhichKeyDesc_zo = "<leader>zo Expand All Regions"
-
-" Display modes
-let g:WhichKeyDesc_d = "<Space>d Display"
-map <leader>dd <action>(ToggleDistractionFreeMode)
-let g:WhichKeyDesc_dd = "<leader>dd Toggle Distraction-Free Mode"
-map <leader>dz <action>(ToggleZenMode)
-let g:WhichKeyDesc_dz = "<leader>dz Toggle Zen Mode"
-map <leader>df <action>(ToggleFullScreen)
-let g:WhichKeyDesc_df = "<leader>df Toggle Full Screen"
-
-" Config options
-let g:WhichKeyDesc_v = "<Space>v Config Options"
-nnoremap <leader>vv :e ~/.ideavimrc<CR>
-let g:WhichKeyDesc_vv = "<leader>vv Edit .ideavimrc"
-nnoremap <leader>vr :source ~/.ideavimrc<CR>
-let g:WhichKeyDesc_vr = "<leader>vr Reload .ideavimrc"
-
 " Window Navigation
 let g:WhichKeyDesc_w = "<Space>w Window Management"
 map <leader>wv <Action>(SplitVertically)
@@ -272,21 +180,6 @@ map <leader>wu <Action>(Unsplit)
 let g:WhichKeyDesc_wu = "<leader>wu Remove Split"
 map <leader>wm <Action>(MoveEditorToOppositeTabGroup)
 let g:WhichKeyDesc_wm = "<leader>wm Move to Other Tab Group"
-
-" Refactoring bindings
-let g:WhichKeyDesc_r = "<Space>r Refactoring"
-map <leader>rn <Action>(RenameElement)
-let g:WhichKeyDesc_rn = "<leader>rn Rename Element"
-map <leader>rm <Action>(ExtractMethod)
-let g:WhichKeyDesc_rm = "<leader>rm Extract Method"
-map <leader>rv <Action>(IntroduceVariable)
-let g:WhichKeyDesc_rv = "<leader>rv Introduce Variable"
-map <leader>rf <Action>(IntroduceField)
-let g:WhichKeyDesc_rf = "<leader>rf Introduce Field"
-map <leader>rs <Action>(ChangeSignature)
-let g:WhichKeyDesc_rs = "<leader>rs Change Signature"
-map <leader>rr <Action>(Refactorings.QuickListPopupAction)
-let g:WhichKeyDesc_rr = "<leader>rr Refactoring Menu"
 
 " Folding
 let g:WhichKeyDesc_z = "<Space>z Folding"
