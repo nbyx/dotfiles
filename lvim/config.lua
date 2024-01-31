@@ -31,6 +31,13 @@ vim.api.nvim_set_keymap('i', '<C-l>', '<Right>', { noremap = true, silent = true
 vim.api.nvim_set_keymap('i', '<C-j>', '<Down>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('i', '<C-k>', '<Up>', { noremap = true, silent = true })
 
+-- Buffer quick navigation
+vim.api.nvim_set_keymap('n', '<Tab>', ':bnext<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<S-Tab>', ':bprevious<CR>', { noremap = true, silent = true })
+
+-- Quick save
+vim.api.nvim_set_keymap('i', '<C-s>', '<Esc>:w<CR>a', { noremap = true, silent = true })
+
 -- Swap lines function
 _G.swap_lines = function(n1, n2)
     if n1 < 1 or n1 > vim.api.nvim_buf_line_count(0) or n2 < 1 or n2 > vim.api.nvim_buf_line_count(0) then
