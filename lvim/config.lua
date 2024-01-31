@@ -11,7 +11,12 @@ formatters.setup {
   },
 }
 
+--- General settings
 vim.wo.relativenumber = true
+vim.o.scrolloff = 10
+vim.o.showmode = true
+vim.o.showcmd = true
+vim.o.scroll = 20
 
 -- mappings
 vim.api.nvim_set_keymap('i', 'kj', '<ESC>', { noremap = true, silent = true })
