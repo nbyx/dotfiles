@@ -23,7 +23,6 @@ function setup_fzf {
   "$(brew --prefix)/opt/fzf/install" --all && success "FZF ist vollständig eingerichtet."
 }
 
-### Interaktive Plugin-Auswahl mit fzf ###
 function select_plugins {
   local optional_plugins=(docker 1password aliases brew dotnet zsh-autosuggestions zsh-syntax-highlighting)
   echo "🔧 Wähle die gewünschten Oh My Zsh Plugins aus (mit Tab auswählen, Enter zum Bestätigen):"
@@ -39,9 +38,8 @@ function select_plugins {
   fi
 }
 
-### Interaktive Tool-Auswahl mit fzf ###
 function select_tools {
-  local optional_tools=(bat neofetch lsd fd dust ripgrep httpie htop glow poppler kitty)
+  local optional_tools=(bat neofetch glances lsd fd dust ripgrep httpie htop glow poppler kitty)
   echo "🔧 Wähle optionale Tools aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_tools
   selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --select-1 --prompt="Tools abwählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
@@ -223,11 +221,9 @@ function preview_configuration {
 
 ### Setup-Script ###
 
-# Essentials und Standard-Tools definieren
 ESSENTIALS=(zsh git zsh-completions fzf zoxide)
 TOOLS=(${ESSENTIALS[@]})
 
-# Installiere Homebrew, falls nicht vorhanden
 step "Überprüfe Homebrew..."
 if ! command -v brew &>/dev/null; then
   echo "🍺 Homebrew wird installiert..."
@@ -236,15 +232,18 @@ else
   success "Homebrew ist bereits installiert."
 fi
 
-# Update Homebrew und installiere Essentials
 step "Aktualisiere Homebrew und installiere essentielle Tools..."
 brew update && success "Homebrew Formeln aktualisiert."
-read -p "Möchtest du alle installierten Homebrew-Pakete aktualisieren? (y/n): " upgrade_choice
+read -p "Möchtest du alle installierten Homebrew-Pakete aktualisieren? (y/N): " -r -n 1 upgrade_choice
+echo 
+upgrade_choice=${upgrade_choice:-N}
+
 if [[ "$upgrade_choice" =~ ^[Yy]$ ]]; then
-  brew upgrade && success "Homebrew Pakete aktualisiert."
+  brew upgrade && echo "✅ Homebrew-Pakete aktualisiert."
 else
   echo "⚠️ Überspringe Homebrew-Upgrade. Bereits installierte Pakete bleiben unverändert."
 fi
+
 for tool in "${ESSENTIALS[@]}"; do
   if ! brew list "$tool" &>/dev/null; then
     echo "📦 Installiere $tool..."
@@ -254,14 +253,11 @@ for tool in "${ESSENTIALS[@]}"; do
   fi
 done
 
-# FZF einrichten
 setup_fzf
 
-# Interaktive Tool-Auswahl
 step "Wähle optionale Tools aus..."
 select_tools
 
-# Installiere optionale Tools
 for tool in "${TOOLS[@]}"; do
   if ! brew list "$tool" &>/dev/null; then
     echo "📦 Installiere $tool..."
@@ -271,7 +267,6 @@ for tool in "${TOOLS[@]}"; do
   fi
 done
 
-# Installiere iTerm2, falls nicht vorhanden
 step "Überprüfe iTerm2..."
 if ! brew list --cask iterm2 &>/dev/null; then
   echo "📟 Installiere iTerm2..."
@@ -280,7 +275,6 @@ else
   success "iTerm2 ist bereits installiert."
 fi
 
-# Installiere Nerd Fonts für Powerlevel10k
 step "Stelle sicher, dass Nerd Fonts verfügbar sind..."
 if ! brew list --cask font-hack-nerd-font &>/dev/null; then
   echo "🎨 Installiere Hack Nerd Font..."
@@ -300,7 +294,6 @@ else
   success "Zsh ist bereits die Standardshell."
 fi
 
-# Installiere Oh My Zsh, falls nicht vorhanden
 step "Installiere Oh My Zsh..."
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   echo "✨ Installiere Oh My Zsh..."
@@ -309,7 +302,8 @@ else
   success "Oh My Zsh ist bereits installiert."
 fi
 
-# Erstelle eine neue .zshrc
+preview_configuration
+
 step "Erstelle eine neue .zshrc..."
 ZSHRC_DEST="$HOME/.zshrc"
 echo "# Zsh Konfigurationsdatei" > "$ZSHRC_DEST"
@@ -317,26 +311,23 @@ echo "export ZSH=\"$HOME/.oh-my-zsh\"" >> "$ZSHRC_DEST"
 echo "ZSH_THEME=\"powerlevel10k/powerlevel10k\"" >> "$ZSHRC_DEST"
 source "$ZSHRC_DEST"
 
-# Vorschau der Konfiguration
-preview_configuration
-
-# Interaktive Plugin-Auswahl
 step "Konfiguriere Oh My Zsh Plugins..."
 select_plugins
 source "$ZSHRC_DEST"
 
-# Füge Aliase basierend auf ausgewählten Tools hinzu
 step "Füge Aliase hinzu..."
 add_aliases
 
-# Erweiterte Konfiguration hinzufügen
 setup_advanced
 
-# Frage nach Neustart der Shell
-read -p "Möchtest du die Shell jetzt neu starten, um die Änderungen zu übernehmen? (y/n): " restart_choice
+read -p "Möchtest du die Shell jetzt neu starten, um die Änderungen zu übernehmen? (Y/n): " -r -n 1 restart_choice
+echo
+restart_choice=${restart_choice:-Y}
+
 if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
   echo "🔄 Starte die Shell neu..."
   exec zsh
 else
   echo "✨ Du kannst die Änderungen mit \"source ~/.zshrc\" übernehmen."
 fi
+
