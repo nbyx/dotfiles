@@ -13,25 +13,27 @@ function error {
   echo -e "❌ $1"
 }
 
-### Funktion: Scrape Plugins ###
-function fetch_plugins {
-  echo "🔄 Hole aktuelle Plugin-Liste von Oh My Zsh..."
-  local plugins_page
-  plugins_page=$(curl -s https://github.com/ohmyzsh/ohmyzsh/wiki/Plugins)
-  local plugins_raw
-  plugins_raw=$(echo "$plugins_page" | grep -oP '(?<=<li><a href=").*?(?=" class)' | awk -F'/' '{print $NF}')
-  available_plugins=($(echo "$plugins_raw" | sort))
+### FZF Einrichten ###
+function setup_fzf {
+  step "Richte FZF ein..."
+  if [[ ! -f "$(brew --prefix)/opt/fzf/install" ]]; then
+    echo "📦 Installiere FZF..."
+    brew install fzf && success "FZF installiert."
+  fi
+  "$(brew --prefix)/opt/fzf/install" --all && success "FZF ist vollständig eingerichtet."
 }
 
 ### Interaktive Plugin-Auswahl mit fzf ###
 function select_plugins {
-  echo "🔧 Wähle die gewünschten Oh My Zsh Plugins aus (mit Leertaste auswählen, Enter zum Bestätigen):"
+  local optional_plugins=(docker 1password aliases brew dotnet zsh-autosuggestions zsh-syntax-highlighting)
+  echo "🔧 Wähle die gewünschten Oh My Zsh Plugins aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_plugins
-  selected_plugins=$(printf "%s\n" "${available_plugins[@]}" | fzf --multi --prompt="Plugins auswählen: " --preview="echo {}" --preview-window=up:3:wrap)
+  selected_plugins=$(printf "%s\n" "${optional_plugins[@]}" | fzf --multi --prompt="Plugins auswählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
 
   if [[ -n "$selected_plugins" ]]; then
-    echo "plugins=(${selected_plugins//\n/ })" >> "$ZSHRC_DEST"
-    success "Folgende Plugins wurden konfiguriert: $selected_plugins"
+    IFS=' ' read -r -a selected_plugins_array <<< "$selected_plugins"
+    echo "plugins=(fzf fzf-tab ${selected_plugins_array[*]})" >> "$ZSHRC_DEST"
+    success "Folgende Plugins wurden konfiguriert: ${selected_plugins_array[*]}"
   else
     echo "⚠️ Keine Plugins ausgewählt."
   fi
@@ -39,14 +41,15 @@ function select_plugins {
 
 ### Interaktive Tool-Auswahl mit fzf ###
 function select_tools {
-  local optional_tools=(bat exa fd dust ripgrep httpie htop)
-  echo "🔧 Wähle optionale Tools aus (mit Leertaste auswählen, Enter zum Bestätigen):"
+  local optional_tools=(bat lsd fd dust ripgrep httpie htop)
+  echo "🔧 Wähle optionale Tools aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_tools
-  selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --prompt="Tools auswählen: " --preview="echo {}" --preview-window=up:3:wrap)
+  selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --prompt="Tools auswählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
 
   if [[ -n "$selected_tools" ]]; then
-    TOOLS+=(${selected_tools//\n/ })
-    success "Folgende Tools werden zusätzlich installiert: $selected_tools"
+    IFS=' ' read -r -a selected_tools_array <<< "$selected_tools"
+    TOOLS+=("${selected_tools_array[@]}")
+    success "Folgende Tools wurden zusätzlich installiert: ${selected_tools_array[*]}"
   else
     echo "⚠️ Keine optionalen Tools ausgewählt."
   fi
@@ -59,9 +62,9 @@ function add_aliases {
     case "$tool" in
       bat)
         echo "alias cat=\"bat --theme=TwoDark\"" >> "$ZSHRC_DEST";;
-      exa)
-        echo "alias ls=\"exa --group-directories-first --icons\"" >> "$ZSHRC_DEST"
-        echo "alias ll=\"exa -lah --git --icons\"" >> "$ZSHRC_DEST";;
+      lsd)
+        echo "alias ls=\"lsd --group-dirs first --icon always\"" >> "$ZSHRC_DEST"
+        echo "alias ll=\"lsd -lah --icon always\"" >> "$ZSHRC_DEST";;
       fd)
         echo "alias find=\"fd\"" >> "$ZSHRC_DEST";;
       dust)
@@ -75,6 +78,47 @@ function add_aliases {
     esac
   done
   success "Aliase für installierte Tools hinzugefügt."
+}
+
+### FZF und Powerlevel10k Setup ###
+function setup_advanced {
+  echo "# FZF Config" >> "$ZSHRC_DEST"
+  echo "export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob \"!.git/*\"'" >> "$ZSHRC_DEST"
+  echo "export FZF_CTRL_T_COMMAND='${FZF_DEFAULT_COMMAND}'" >> "$ZSHRC_DEST"
+  echo "export FZF_DEFAULT_OPTS=\"--height 40% --layout=reverse --border\"" >> "$ZSHRC_DEST"
+
+  if ! grep -q "[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh" ~/.zshrc; then
+      echo "[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh" >> ~/.zshrc
+      echo "✅ FZF-Source Zeile zur ~/.zshrc hinzugefügt."
+  else
+      echo "⚠️ FZF-Source Zeile ist bereits in der ~/.zshrc vorhanden."
+  fi
+
+  echo "# Powerlevel10k Config" >> "$ZSHRC_DEST"
+  echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC_DEST"
+
+  echo "# Homebrew PATH" >> "$ZSHRC_DEST"
+  echo "export PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\"" >> "$ZSHRC_DEST"
+
+  echo "# Enable FZF Tab Completion" >> "$ZSHRC_DEST"
+  ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+
+  if [[ ! -d "$ZSH_CUSTOM/plugins/fzf-tab" ]]; then
+    git clone https://github.com/Aloxaf/fzf-tab "$ZSH_CUSTOM/plugins/fzf-tab"
+    
+    success "fzf-tab Plugin installiert."
+  else
+    success "fzf-tab Plugin ist bereits vorhanden."
+  fi
+
+  echo "# FZF-Tab Erweiterte Konfiguration" >> ~/.zshrc
+  echo "zstyle ':completion:*' menu select" >> ~/.zshrc
+  echo "zstyle ':completion:*' select-prompt '%SScrolling active: %s rows remaining%s'" >> ~/.zshrc
+  echo "zstyle ':fzf-tab:*' fzf-preview 'cat {}'" >> ~/.zshrc
+  echo "zstyle ':fzf-tab:*' fzf-bindings 'tab:toggle-preview'" >> ~/.zshrc
+
+
+  echo "source $(brew --prefix)/share/powerlevel10k/powerlevel10k.zsh-theme" >>~/.zshrc
 }
 
 ### Vorschau der Konfiguration ###
@@ -93,7 +137,7 @@ function preview_configuration {
 ### Setup-Script ###
 
 # Essentials und Standard-Tools definieren
-ESSENTIALS=(zsh zsh-completions fzf zoxide)
+ESSENTIALS=(zsh git zsh-completions fzf zoxide)
 TOOLS=(${ESSENTIALS[@]})
 
 # Installiere Homebrew, falls nicht vorhanden
@@ -107,7 +151,13 @@ fi
 
 # Update Homebrew und installiere Essentials
 step "Aktualisiere Homebrew und installiere essentielle Tools..."
-brew update && brew upgrade && success "Homebrew aktualisiert."
+brew update && success "Homebrew Formeln aktualisiert."
+read -p "Möchtest du alle installierten Homebrew-Pakete aktualisieren? (y/n): " upgrade_choice
+if [[ "$upgrade_choice" =~ ^[Yy]$ ]]; then
+  brew upgrade && success "Homebrew Pakete aktualisiert."
+else
+  echo "⚠️ Überspringe Homebrew-Upgrade. Bereits installierte Pakete bleiben unverändert."
+fi
 for tool in "${ESSENTIALS[@]}"; do
   if ! brew list "$tool" &>/dev/null; then
     echo "📦 Installiere $tool..."
@@ -116,6 +166,9 @@ for tool in "${ESSENTIALS[@]}"; do
     success "$tool ist bereits installiert."
   fi
 done
+
+# FZF einrichten
+setup_fzf
 
 # Interaktive Tool-Auswahl
 step "Wähle optionale Tools aus..."
@@ -149,7 +202,6 @@ else
   success "Hack Nerd Font ist bereits installiert."
 fi
 
-# Setze Zsh als Standardshell
 step "Überprüfe, ob Zsh die Standardshell ist..."
 if [[ "$SHELL" != "$(which zsh)" ]]; then
   echo "⚙️ Setze Zsh als Standardshell..."
@@ -157,7 +209,6 @@ if [[ "$SHELL" != "$(which zsh)" ]]; then
     echo "$(which zsh)" | sudo tee -a /etc/shells
   fi
   chsh -s "$(which zsh)" && success "Zsh als Standardshell gesetzt."
-  exec zsh
 else
   success "Zsh ist bereits die Standardshell."
 fi
@@ -167,7 +218,6 @@ step "Installiere Oh My Zsh..."
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   echo "✨ Installiere Oh My Zsh..."
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && success "Oh My Zsh installiert."
-  exec zsh
 else
   success "Oh My Zsh ist bereits installiert."
 fi
@@ -179,10 +229,6 @@ echo "# Zsh Konfigurationsdatei" > "$ZSHRC_DEST"
 echo "export ZSH=\"$HOME/.oh-my-zsh\"" >> "$ZSHRC_DEST"
 echo "ZSH_THEME=\"powerlevel10k/powerlevel10k\"" >> "$ZSHRC_DEST"
 source "$ZSHRC_DEST"
-
-# Hole verfügbare Plugins
-step "Hole verfügbare Plugins von Oh My Zsh..."
-fetch_plugins
 
 # Vorschau der Konfiguration
 preview_configuration
@@ -196,33 +242,42 @@ source "$ZSHRC_DEST"
 step "Füge Aliase hinzu..."
 add_aliases
 
-# Füge FZF Key Bindings hinzu
-step "Füge FZF Key Bindings hinzu..."
-if [[ ! -f "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh" ]]; then
-  echo "🔧 Installiere FZF Key Bindings..."
-  "$(brew --prefix)/opt/fzf/install" --all && success "FZF Key Bindings installiert."
-else
-  success "FZF Key Bindings sind bereits konfiguriert."
-fi
+# Erweiterte Konfiguration hinzufügen
+setup_advanced
 
-# Frage nach p10k configure
-read -p "Möchtest du den Powerlevel10k Konfigurationsassistenten jetzt starten? (y/n): " configure_choice
-if [[ "$configure_choice" =~ ^[Yy]$ ]]; then
-  echo "⚙️ Starte 'p10k configure'..."
-  exec zsh -i -c "p10k configure"
-else
-  echo "✨ Du kannst später 'p10k configure' manuell ausführen."
+### Tab-Completion aktivieren ###
+echo '
+# Temporäres Setup für Zsh-Completion
+if [ -f "$HOME/.temp_zsh_setup.sh" ]; then
+  source "$HOME/.temp_zsh_setup.sh"
 fi
+' >> "$HOME/.zshrc"
 
-# Frage, ob die Shell neu geladen werden soll
-read -p "Möchtest du die Shell jetzt neu laden? (y/n): " reload_choice
-if [[ "$reload_choice" =~ ^[Yy]$ ]]; then
-  echo "🔄 Lade die Shell neu..."
+# Temporäres Script erstellen
+cat << 'EOF' > "$HOME/.temp_zsh_setup.sh"
+#!/bin/zsh
+
+# Initialisiere Zsh-Komponenten
+autoload -U compinit && compinit
+autoload -U bashcompinit && bashcompinit
+
+# Entferne den temporären Setup-Block aus der .zshrc
+sed -i '' '/# Temporäres Setup für Zsh-Completion/,/fi/d' "$HOME/.zshrc"
+
+# Lösche dieses temporäre Script
+rm -- "$0"
+EOF
+
+chmod +x "$HOME/.temp_zsh_setup.sh"
+
+echo "⚙️ Temporäres Setup-Script erstellt und in .zshrc eingetragen."
+echo "✨ Starte die Shell neu, um die Änderungen zu übernehmen."
+
+# Frage nach Neustart der Shell
+read -p "Möchtest du die Shell jetzt neu starten, um die Änderungen zu übernehmen? (y/n): " restart_choice
+if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
+  echo "🔄 Starte die Shell neu..."
   exec zsh
 else
-  echo "✨ Du kannst später 'exec zsh' manuell ausführen."
+  echo "✨ Du kannst die Änderungen mit \"source ~/.zshrc\" übernehmen."
 fi
-
-# Endfeedback
-echo -e "\n🎉 Fertig! Alle Installationen sind erfolgreich abgeschlossen."
-
