@@ -28,7 +28,7 @@ function select_plugins {
   local optional_plugins=(docker 1password aliases brew dotnet zsh-autosuggestions zsh-syntax-highlighting)
   echo "🔧 Wähle die gewünschten Oh My Zsh Plugins aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_plugins
-  selected_plugins=$(printf "%s\n" "${optional_plugins[@]}" | fzf --multi --prompt="Plugins auswählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
+  selected_plugins=$(printf "%s\n" "${optional_plugins[@]}" | fzf --multi --select-1 --prompt="Plugins abwählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
 
   if [[ -n "$selected_plugins" ]]; then
     IFS=' ' read -r -a selected_plugins_array <<< "$selected_plugins"
@@ -41,10 +41,10 @@ function select_plugins {
 
 ### Interaktive Tool-Auswahl mit fzf ###
 function select_tools {
-  local optional_tools=(bat lsd fd dust ripgrep httpie htop)
+  local optional_tools=(bat neofetch lsd fd dust ripgrep httpie htop glow poppler kitty)
   echo "🔧 Wähle optionale Tools aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_tools
-  selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --prompt="Tools auswählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
+  selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --select-1 --prompt="Tools abwählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
 
   if [[ -n "$selected_tools" ]]; then
     IFS=' ' read -r -a selected_tools_array <<< "$selected_tools"
@@ -83,9 +83,67 @@ function add_aliases {
 ### FZF und Powerlevel10k Setup ###
 function setup_advanced {
   echo "# FZF Config" >> "$ZSHRC_DEST"
-  echo "export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob \"!.git/*\"'" >> "$ZSHRC_DEST"
-  echo "export FZF_CTRL_T_COMMAND='${FZF_DEFAULT_COMMAND}'" >> "$ZSHRC_DEST"
-  echo "export FZF_DEFAULT_OPTS=\"--height 40% --layout=reverse --border\"" >> "$ZSHRC_DEST"
+  echo "# Set up fzf key bindings and fuzzy completion" >> "$ZSHRC_DEST"
+  echo "source <(fzf --zsh)" >> "$ZSHRC_DEST"
+  FZF_DEFAULT_COMMAND="rg --files --hidden --follow --glob \"!.git/*\""
+  echo "export FZF_DEFAULT_COMMAND='$FZF_DEFAULT_COMMAND'" >> "$ZSHRC_DEST"
+  echo "export FZF_CTRL_T_COMMAND=\$FZF_DEFAULT_COMMAND" >> "$ZSHRC_DEST"
+
+  # Grundoptionen für FZF
+  FZF_OPTS="--height 40% --layout=reverse --border"
+
+  # Preview-Befehl erstellen
+  PREVIEW_COMMAND='
+  if [[ -z {} ]]; then
+    echo \"[error] Datei existiert nicht oder Pfad ungültig.\"
+  elif [[ \$(file --mime {}) =~ inode/x-empty ]]; then
+    echo \"[info] Datei ist leer.\"
+  elif [[ \$(file --mime {}) =~ application/pdf ]]; then'
+  if [[ " ${TOOLS[*]} " =~ " poppler " ]]; then
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    pdftotext {} - 2>/dev/null || echo \\\"[error] Kann PDF nicht lesen.\\\""
+  else
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    echo \\\"[info] PDF-Vorschau nicht verfügbar. Installiere 'poppler'.\\\""
+  fi
+  PREVIEW_COMMAND="${PREVIEW_COMMAND}
+  elif [[ \\\$(file --mime {}) =~ binary ]]; then
+    echo \\\"[info] Binärdateien werden nicht unterstützt.\\\"
+  elif [[ \\\$(file --mime {}) =~ image/.* ]]; then"
+  if [[ " ${TOOLS[*]} " =~ " kitty " ]]; then
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    kitty +kitten icat {} || echo \\\"[info] Bildvorschau nicht verfügbar.\\\""
+  else
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    echo \\\"[info] Bildvorschau nicht verfügbar. Installiere 'kitty'.\\\""
+  fi
+  PREVIEW_COMMAND="${PREVIEW_COMMAND}
+  elif [[ {} =~ .*\\\\.md$ ]]; then"
+  if [[ " ${TOOLS[*]} " =~ " glow " ]]; then
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    glow {} || echo \\\"[info] Markdown-Vorschau nicht verfügbar.\\\""
+  else
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    echo \\\"[info] Markdown-Vorschau nicht verfügbar. Installiere 'glow'.\\\""
+  fi
+  PREVIEW_COMMAND="${PREVIEW_COMMAND}
+  else"
+  if [[ " ${TOOLS[*]} " =~ " bat " ]]; then
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    bat --style=numbers --color=always {} || cat {} | head -500"
+  else
+    PREVIEW_COMMAND="${PREVIEW_COMMAND}
+    cat {} | head -500"
+  fi
+  PREVIEW_COMMAND="${PREVIEW_COMMAND}
+  fi"
+
+  # FZF_OPTS mit Preview-Befehl erweitern
+  FZF_OPTS="${FZF_OPTS} --preview=\"${PREVIEW_COMMAND}\" --preview-window=up:30%:wrap"
+
+  # In der Zsh-Konfiguration speichern
+  echo "export FZF_DEFAULT_OPTS='${FZF_OPTS}'" >> "$ZSHRC_DEST"
+
 
   if ! grep -q "[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh" ~/.zshrc; then
       echo "[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh" >> ~/.zshrc
@@ -98,7 +156,17 @@ function setup_advanced {
   echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC_DEST"
 
   echo "# Homebrew PATH" >> "$ZSHRC_DEST"
-  echo "export PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\"" >> "$ZSHRC_DEST"
+  NEW_PATH="/usr/local/bin:/opt/homebrew/bin"
+
+  CLEANED_PATH=$(echo "$PATH" | tr ':' '\n' | awk '!seen[$0]++' | tr '\n' ':' | sed 's/:$//')
+
+  if [[ ":$CLEANED_PATH:" != *":$NEW_PATH:"* ]]; then
+    FINAL_PATH="$NEW_PATH:$CLEANED_PATH"
+  else
+    FINAL_PATH="$CLEANED_PATH"
+  fi
+
+  echo "export PATH=\"$FINAL_PATH\"" >> "$ZSHRC_DEST"
 
   echo "# Enable FZF Tab Completion" >> "$ZSHRC_DEST"
   ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
@@ -111,6 +179,16 @@ function setup_advanced {
     success "fzf-tab Plugin ist bereits vorhanden."
   fi
 
+  # Ergänze die .zshrc für fzf-tab und autoload
+  echo "# FZF Tab Plugin" >> "$HOME/.zshrc"
+  echo "if [ -d \"\${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/fzf-tab\" ]; then" >> "$HOME/.zshrc"
+  echo "  source \"\${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/fzf-tab/fzf-tab.plugin.zsh\"" >> "$HOME/.zshrc"
+  echo "fi" >> "$HOME/.zshrc"
+
+  # Ergänze autoload für Tab Completion
+  echo "# Autoload for Tab Completion" >> "$HOME/.zshrc"
+  echo "autoload -U compinit && compinit" >> "$HOME/.zshrc"
+
   echo "# FZF-Tab Erweiterte Konfiguration" >> ~/.zshrc
   echo "zstyle ':completion:*' menu select" >> ~/.zshrc
   echo "zstyle ':completion:*' select-prompt '%SScrolling active: %s rows remaining%s'" >> ~/.zshrc
@@ -119,6 +197,15 @@ function setup_advanced {
 
 
   echo "source $(brew --prefix)/share/powerlevel10k/powerlevel10k.zsh-theme" >>~/.zshrc
+
+  if [[ " ${TOOLS[*]} " =~ " neofetch " ]]; then
+      echo 'if [[ $- == *i* ]]; then' >>~/.zshrc
+      echo '  echo "🚀 Willkommen, $(whoami)! Dein Terminal ist bereit.\n"' >>~/.zshrc
+      NEOFETCH_COMMAND="  neofetch --ascii_distro MacOS --memory_display infobar --disable shell packages resolution --color_blocks on --colors 4 6 1 3 5 7"
+      echo "$NEOFETCH_COMMAND" >>~/.zshrc
+      echo 'fi' >>~/.zshrc
+      echo "✅ Neofetch-Befehl wurde in die .zshrc eingefügt!"
+  fi
 }
 
 ### Vorschau der Konfiguration ###
@@ -244,34 +331,6 @@ add_aliases
 
 # Erweiterte Konfiguration hinzufügen
 setup_advanced
-
-### Tab-Completion aktivieren ###
-echo '
-# Temporäres Setup für Zsh-Completion
-if [ -f "$HOME/.temp_zsh_setup.sh" ]; then
-  source "$HOME/.temp_zsh_setup.sh"
-fi
-' >> "$HOME/.zshrc"
-
-# Temporäres Script erstellen
-cat << 'EOF' > "$HOME/.temp_zsh_setup.sh"
-#!/bin/zsh
-
-# Initialisiere Zsh-Komponenten
-autoload -U compinit && compinit
-autoload -U bashcompinit && bashcompinit
-
-# Entferne den temporären Setup-Block aus der .zshrc
-sed -i '' '/# Temporäres Setup für Zsh-Completion/,/fi/d' "$HOME/.zshrc"
-
-# Lösche dieses temporäre Script
-rm -- "$0"
-EOF
-
-chmod +x "$HOME/.temp_zsh_setup.sh"
-
-echo "⚙️ Temporäres Setup-Script erstellt und in .zshrc eingetragen."
-echo "✨ Starte die Shell neu, um die Änderungen zu übernehmen."
 
 # Frage nach Neustart der Shell
 read -p "Möchtest du die Shell jetzt neu starten, um die Änderungen zu übernehmen? (y/n): " restart_choice
