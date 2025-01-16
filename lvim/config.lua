@@ -81,5 +81,14 @@ lvim.builtin.which_key.mappings["t"] = {
 lvim.plugins = {
   { "lunarvim/colorschemes" },
   { "ThePrimeagen/vim-be-good" },
+  {
+    "lervag/vimtex",
+    lazy = false,
+    init = function()
+      vim.g.vimtex_view_method = "skim"
+      vim.g.vimtex_compiler_method = 'latexmk'  -- Verwendet latexmk für die Kompilierung
+      vim.g.tex_flavor = 'latex'
+    end
+  }
 }
 
