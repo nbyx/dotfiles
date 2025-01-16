@@ -39,7 +39,7 @@ function select_plugins {
 }
 
 function select_tools {
-  local optional_tools=(bat neofetch glances lsd fd dust ripgrep httpie htop glow poppler lazydocker grc tldr)
+  local optional_tools=(bat neofetch glances lsd fd dust ripgrep httpie htop glow poppler lazydocker grc tldr 1password-cli)
   echo "🔧 Wähle optionale Tools aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_tools
   selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --select-1 --prompt="Tools abwählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
