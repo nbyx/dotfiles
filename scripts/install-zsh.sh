@@ -95,8 +95,6 @@ function add_aliases {
 ### FZF und Powerlevel10k Setup ###
 function setup_advanced {
   echo "# FZF Config" >> "$ZSHRC_DEST"
-  echo "# Set up fzf key bindings and fuzzy completion" >> "$ZSHRC_DEST"
-  echo "source <(fzf --zsh)" >> "$ZSHRC_DEST"
   FZF_DEFAULT_COMMAND="rg --files --hidden --follow --glob \"!.git/*\""
   echo "export FZF_DEFAULT_COMMAND='$FZF_DEFAULT_COMMAND'" >> "$ZSHRC_DEST"
   echo "export FZF_CTRL_T_COMMAND=\$FZF_DEFAULT_COMMAND" >> "$ZSHRC_DEST"
@@ -163,6 +161,8 @@ function setup_advanced {
   else
       echo "⚠️ FZF-Source Zeile ist bereits in der ~/.zshrc vorhanden."
   fi
+  echo "# Set up fzf key bindings and fuzzy completion" >> "$ZSHRC_DEST"
+  echo "source <(fzf --zsh)" >> "$ZSHRC_DEST"
 
   echo "# Powerlevel10k Config" >> "$ZSHRC_DEST"
   echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC_DEST"
