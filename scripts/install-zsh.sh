@@ -39,7 +39,7 @@ function select_plugins {
 }
 
 function select_tools {
-  local optional_tools=(bat neofetch glances lsd fd dust ripgrep httpie htop glow poppler kitty)
+  local optional_tools=(bat neofetch glances lsd fd dust ripgrep httpie htop glow poppler lazydocker grc tldr)
   echo "🔧 Wähle optionale Tools aus (mit Tab auswählen, Enter zum Bestätigen):"
   local selected_tools
   selected_tools=$(printf "%s\n" "${optional_tools[@]}" | fzf --multi --select-1 --prompt="Tools abwählen mit TAB: " --preview="echo {}" --preview-window=up:3:wrap | tr '\n' ' ')
@@ -73,6 +73,20 @@ function add_aliases {
         echo "alias curl=\"http\"" >> "$ZSHRC_DEST";;
       htop)
         echo "alias top=\"htop\"" >> "$ZSHRC_DEST";;
+      tldr)
+        echo "alias tldr=\"tldr --color\"";;
+      lazydocker)
+        echo "alias lzd='lazydocker'" >> "$ZSHRC_DEST";;
+      grc)
+        echo "alias ping=\"grc ping\"" >> "$ZSHRC_DEST"
+        echo "alias traceroute=\"grc traceroute\"" >> "$ZSHRC_DEST"
+        echo "alias netstat=\"grc netstat\"" >> "$ZSHRC_DEST"
+        echo "alias make=\"grc make\"" >> "$ZSHRC_DEST"
+        echo "alias gcc=\"grc gcc\"" >> "$ZSHRC_DEST"
+        echo "alias g++=\"grc g++\"" >> "$ZSHRC_DEST"
+        echo "alias dig=\"grc dig\"" >> "$ZSHRC_DEST"
+        echo "alias df=\"grc df\"" >> "$ZSHRC_DEST"
+        echo "alias mount=\"grc mount\"" >> "$ZSHRC_DEST";;
     esac
   done
   success "Aliase für installierte Tools hinzugefügt."
@@ -212,7 +226,8 @@ function preview_configuration {
   echo "- Essentials: ${ESSENTIALS[*]}"
   echo "- Optionale Tools: ${TOOLS[*]}"
   echo "- Theme: powerlevel10k"
-  read -p "Möchtest du fortfahren? (y/n): " choice
+  read -p "Möchtest du fortfahren? (Y/n): " choice
+  choice=${choice:-Y}
   if [[ ! "$choice" =~ ^[Yy]$ ]]; then
     error "Installation abgebrochen."
     exit 1
