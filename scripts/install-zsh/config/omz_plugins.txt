@@ -1,0 +1,13 @@
+# Verfügbare Oh My Zsh Plugins für die Auswahl
+# Format: plugin-name [Beschreibung, optional]
+git
+fzf
+fzf-tab
+docker
+1password
+aliases
+brew
+dotnet
+zsh-autosuggestions
+zsh-syntax-highlighting
+

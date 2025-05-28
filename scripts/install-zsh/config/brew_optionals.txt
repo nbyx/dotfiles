@@ -1,0 +1,17 @@
+# Optionale CLI Tools (eine pro Zeile)
+# Kommentarzeilen werden ignoriert
+bat
+neofetch
+glances
+lsd
+fd
+dust
+ripgrep
+httpie
+htop
+glow
+poppler
+lazydocker
+grc
+tldr
+1password-cli
