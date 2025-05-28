@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
+set -eo pipefail
+set -u
 
+# shellcheck source=../lib/utils.sh
 source "$(dirname "$0")/../lib/utils.sh"
 
 DRY_RUN="${DRY_RUN:-false}"
 PERFORM_UPDATES="${PERFORM_UPDATES:-false}"
-
+# AUTO_CONFIRM wird hier nicht direkt verwendet, da keine Ja/Nein-Abfragen
 
 function set_zsh_as_default_shell() {
   log_step "Zsh als Standardshell einrichten"
@@ -27,7 +30,6 @@ function set_zsh_as_default_shell() {
 
   if ! grep -Fxq "$zsh_path" /etc/shells; then
     log_info "Füge '$zsh_path' zu /etc/shells hinzu (benötigt sudo)..."
-    
     if echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null; then
       log_success "📝 '$zsh_path' zu /etc/shells hinzugefügt."
     else
@@ -42,14 +44,13 @@ function set_zsh_as_default_shell() {
   fi
 }
 
-
 function setup_oh_my_zsh() {
   log_step "Oh My Zsh einrichten"
   if [[ -d "$OMZ_DIR" ]]; then
     log_success "Oh My Zsh ist bereits installiert in $OMZ_DIR."
     if [[ "$PERFORM_UPDATES" == true ]]; then
         log_info "Aktualisiere Oh My Zsh (wegen --update)..."
-        
+        # shellcheck disable=SC2034
         if execute_or_dryrun "Oh My Zsh Update" ZSH=$OMZ_DIR sh -c '$ZSH/tools/upgrade.sh'; then
             [[ "$DRY_RUN" == false ]] && log_success "✅ Oh My Zsh aktualisiert."
         else
@@ -60,7 +61,6 @@ function setup_oh_my_zsh() {
   fi
 
   log_info "✨ Installiere Oh My Zsh..."
-  
   if [[ "$DRY_RUN" == true ]]; then
     log_info "[DRY RUN] Würde Oh My Zsh Installationsskript ausführen."
     return
@@ -73,7 +73,6 @@ function setup_oh_my_zsh() {
     exit 1
   fi
 }
-
 
 if ! command_exists "zsh"; then
     log_error "Zsh ist nicht installiert. Bitte zuerst 'scripts/install_tools.sh' ausführen oder Zsh manuell installieren."

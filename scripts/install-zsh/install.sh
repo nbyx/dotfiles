@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -eo pipefail
+set -u
 
 export DRY_RUN=false
 export PERFORM_UPDATES=false
@@ -87,8 +88,8 @@ else
         log_info "Automatische Zustimmung zum Shell-Neustart durch --yes Flag."
     else
         read -p "Möchtest du die Shell jetzt neu starten (exec zsh -l)? (Y/n): " -r restart_choice
-        restart_choice=${restart_choice:-Y}
-        if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
+        local choice_val_restart="${restart_choice:-Y}"
+        if [[ "$choice_val_restart" =~ ^[Yy]$ ]]; then
             confirm_shell_restart=true
         fi
     fi

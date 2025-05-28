@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
 set -eo pipefail
+set -u
 
 export DRY_RUN=false
 export UNINSTALL_MODE=true
 export AUTO_CONFIRM=false
 export ONLY_CLEANUP_MODE=false
+export FORCE_REMOVE_ALL_CONFIGURED_TOOLS=false
 
 declare -a REMOVED_TOOLS_LIST=()
+MANIFEST_FILE="$HOME/.config/dotfiles_installer/installed_tools_manifest.txt"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) export DRY_RUN=true; shift ;;
     -y|--yes) export AUTO_CONFIRM=true; shift ;;
     --only-cleanup) export ONLY_CLEANUP_MODE=true; shift ;;
+    --force-remove-all-configured-tools) export FORCE_REMOVE_ALL_CONFIGURED_TOOLS=true; shift;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Options:"
       echo "  --dry-run          Zeigt nur an, was getan würde."
       echo "  -y, --yes          Automatische Zustimmung für alle Abfragen."
       echo "  --only-cleanup     Entfernt nur Konfigurationen, nicht die installierten Tools."
+      echo "  --force-remove-all-configured-tools"
+      echo "                     Entfernt alle in config/*.txt gelisteten Tools, auch wenn sie nicht"
+      echo "                     explizit vom Installer hinzugefügt wurden (VORSICHT!)."
       exit 0 ;;
     *) echo "Unbekannte Option für uninstall.sh: $1"; exit 1 ;;
   esac
@@ -28,14 +35,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # shellcheck source=lib/utils.sh
 source "$SCRIPT_DIR/lib/utils.sh"
 
-log_step "Starte Deinstallation des Dotfiles Setups (Dry Run: $DRY_RUN, Auto-Confirm: $AUTO_CONFIRM, Only-Cleanup: $ONLY_CLEANUP_MODE)"
+log_step "Starte Deinstallation (Dry Run: $DRY_RUN, Auto-Confirm: $AUTO_CONFIRM, Only-Cleanup: $ONLY_CLEANUP_MODE, Force-Remove: $FORCE_REMOVE_ALL_CONFIGURED_TOOLS)"
 
 confirm_uninstall=false
 uninstall_prompt_message="BIST DU SICHER, dass du "
 if [[ "$ONLY_CLEANUP_MODE" == true ]]; then
     uninstall_prompt_message+="alle von diesem Installer erstellten Konfigurationen entfernen möchtest (Tools bleiben installiert)? (ja/NEIN): "
+elif [[ "$FORCE_REMOVE_ALL_CONFIGURED_TOOLS" == true ]]; then
+    uninstall_prompt_message+="alle von diesem Installer verwalteten Konfigurationen UND ALLE in config/*.txt gelisteten Tools entfernen möchtest (AUCH WENN SIE NICHT DURCH DIESES SKRIPT INSTALLIERT WURDEN)? (ja/NEIN): "
 else
-    uninstall_prompt_message+="alle von diesem Installer verwalteten Komponenten und Konfigurationen entfernen möchtest? (ja/NEIN): "
+    uninstall_prompt_message+="alle von diesem Installer verwalteten Konfigurationen und die DURCH DIESES SKRIPT INSTALLIERTEN Tools (gemäß Manifest) entfernen möchtest? (ja/NEIN): "
 fi
 
 if [[ "$AUTO_CONFIRM" == true ]]; then
@@ -43,7 +52,8 @@ if [[ "$AUTO_CONFIRM" == true ]]; then
     log_info "Automatische Zustimmung zur Deinstallation durch --yes Flag."
 else
     read -p "$uninstall_prompt_message" confirm_input
-    if [[ "$confirm_input" =~ ^(ja|JA|Ja)$ ]]; then
+    local confirm_val="${confirm_input:-N}"
+    if [[ "$confirm_val" =~ ^(ja|JA|Ja|y|Y)$ ]]; then
         confirm_uninstall=true
     fi
 fi
@@ -89,9 +99,11 @@ fi
 log_info "🗑️  Entferne FZF Source-Zeile aus $ZSHRC_DEST..."
 if [[ "$DRY_RUN" == false ]]; then
     if [[ -f "$ZSHRC_DEST" ]]; then
-        local sed_inplace_opt='-i'
-        [[ "$(uname)" == "Darwin" ]] && sed_inplace_opt='-i ""'
-        eval "sed $sed_inplace_opt '/\[ -f ~\/\.fzf\.zsh \] && source ~\/\.fzf\.zsh/d' \"$ZSHRC_DEST\""
+        if [[ "$(uname)" == "Darwin" ]]; then
+            sed -i "" '/\[ -f ~\/\.fzf\.zsh \] && source ~\/\.fzf\.zsh/d' "$ZSHRC_DEST"
+        else
+            sed -i '/\[ -f ~\/\.fzf\.zsh \] && source ~\/\.fzf\.zsh/d' "$ZSHRC_DEST"
+        fi
         log_success "🗑️ FZF Source Zeile aus $ZSHRC_DEST entfernt (falls vorhanden)."
     else
         log_info "$ZSHRC_DEST nicht gefunden, nichts zu entfernen."
@@ -119,56 +131,81 @@ fi
 if [[ "$ONLY_CLEANUP_MODE" == true ]]; then
     log_info "--only-cleanup Modus: Überspringe Deinstallation von Tools, Casks und brew autoremove."
 else
-    log_info "🗑️  Versuche, installierte Tools zu entfernen (basierend auf Konfigurationsdateien)..."
     TOOLS_TO_UNINSTALL=()
-    if [[ -f "$SCRIPT_DIR/config/brew_essentials.txt" ]]; then
-        while IFS= read -r tool || [[ -n "$tool" ]]; do
-            tool=$(echo "$tool" | xargs); [[ "$tool" =~ ^#.*$ || -z "$tool" ]] && continue
-            TOOLS_TO_UNINSTALL+=("$tool")
-        done < "$SCRIPT_DIR/config/brew_essentials.txt"
-    fi
-    if [[ -f "$SCRIPT_DIR/config/brew_optionals.txt" ]]; then
-        while IFS= read -r tool || [[ -n "$tool" ]]; do
-            tool=$(echo "$tool" | xargs); [[ "$tool" =~ ^#.*$ || -z "$tool" ]] && continue
-            TOOLS_TO_UNINSTALL+=("$tool")
-        done < "$SCRIPT_DIR/config/brew_optionals.txt"
-    fi
-
-    # shellcheck disable=SC2207
-    unique_tools_to_uninstall=($(echo "${TOOLS_TO_UNINSTALL[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-
-    for tool_name in "${unique_tools_to_uninstall[@]}"; do
-        is_cask=false
-        case "$tool_name" in
-            iterm2|font-hack-nerd-font) is_cask=true ;;
-        esac
-
-        if $is_cask; then
-            if [[ "${DRY_RUN:-false}" == true ]]; then
-                log_info "[DRY RUN] Würde Deinstallation von Cask '$tool_name' prüfen."
-            elif $PKG_CASK_LIST_CMD "$tool_name" &>/dev/null; then
-                # shellcheck disable=SC2086
-                if execute_or_dryrun "Cask $tool_name entfernen" $PKG_CASK_UNINSTALL_CMD --force "$tool_name"; then
-                    log_success "🗑️ Cask $tool_name entfernt."
-                    [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name (cask)")
-                fi
-            else
-                log_info "Cask $tool_name ist nicht installiert."
-            fi
-        else
-            if [[ "${DRY_RUN:-false}" == true ]]; then
-                log_info "[DRY RUN] Würde Deinstallation von Tool '$tool_name' prüfen."
-            elif $PKG_LIST_CMD "$tool_name" &>/dev/null; then
-                # shellcheck disable=SC2086
-                if execute_or_dryrun "Tool $tool_name entfernen" $PKG_UNINSTALL_CMD --force "$tool_name"; then
-                    log_success "🗑️ Tool $tool_name entfernt."
-                    [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name")
-                fi
-            else
-                log_info "Tool $tool_name ist nicht installiert."
-            fi
+    if [[ "$FORCE_REMOVE_ALL_CONFIGURED_TOOLS" == true ]]; then
+        log_warn "FORCE_REMOVE_ALL_CONFIGURED_TOOLS ist aktiv: Versuche alle Tools aus config/*.txt zu entfernen."
+        if [[ -f "$SCRIPT_DIR/config/brew_essentials.txt" ]]; then
+            tool_raw_ess=""
+            while IFS= read -r tool_raw_ess || [[ -n "$tool_raw_ess" ]]; do
+                local tool_ess
+                tool_ess=$(echo "$tool_raw_ess" | xargs); [[ "$tool_ess" =~ ^#.*$ || -z "$tool_ess" ]] && continue
+                TOOLS_TO_UNINSTALL+=("$tool_ess")
+            done < "$SCRIPT_DIR/config/brew_essentials.txt"
         fi
-    done
+        if [[ -f "$SCRIPT_DIR/config/brew_optionals.txt" ]]; then
+            tool_raw_opt=""
+            while IFS= read -r tool_raw_opt || [[ -n "$tool_raw_opt" ]]; do
+                local tool_opt
+                tool_opt=$(echo "$tool_raw_opt" | xargs); [[ "$tool_opt" =~ ^#.*$ || -z "$tool_opt" ]] && continue
+                TOOLS_TO_UNINSTALL+=("$tool_opt")
+            done < "$SCRIPT_DIR/config/brew_optionals.txt"
+        fi
+    elif [[ -f "$MANIFEST_FILE" ]]; then
+        log_info "🗑️  Entferne Tools gemäß Manifest-Datei: $MANIFEST_FILE"
+        tool_name_manifest=""
+        while IFS= read -r tool_name_manifest || [[ -n "$tool_name_manifest" ]]; do
+            local tool_manifest
+            tool_manifest=$(echo "$tool_name_manifest" | xargs)
+            [[ -z "$tool_manifest" ]] && continue
+            TOOLS_TO_UNINSTALL+=("$tool_manifest")
+        done < "$MANIFEST_FILE"
+    else
+        log_info "Keine Manifest-Datei ($MANIFEST_FILE) gefunden. Es werden keine spezifischen Tools deinstalliert."
+    fi
+
+    if [[ ${#TOOLS_TO_UNINSTALL[@]} -gt 0 ]]; then
+        # shellcheck disable=SC2207
+        unique_tools_to_uninstall=($(echo "${TOOLS_TO_UNINSTALL[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+        log_info "Folgende Tools/Casks werden zur Deinstallation geprüft: ${unique_tools_to_uninstall[*]}"
+
+        for tool_name_iter in "${unique_tools_to_uninstall[@]}"; do
+            is_cask=false
+            case "$tool_name_iter" in
+                iterm2|font-hack-nerd-font) is_cask=true ;;
+            esac
+
+            if $is_cask; then
+                if [[ "${DRY_RUN:-false}" == true ]]; then
+                    log_info "[DRY RUN] Würde Deinstallation von Cask '$tool_name_iter' prüfen."
+                # shellcheck disable=SC2086
+                elif $PKG_CASK_LIST_CMD $tool_name_iter &>/dev/null; then
+                    # shellcheck disable=SC2086
+                    if execute_or_dryrun "Cask $tool_name_iter entfernen" $PKG_CASK_UNINSTALL_CMD --force "$tool_name_iter"; then
+                        log_success "🗑️ Cask $tool_name_iter entfernt."
+                        [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter (cask)")
+                    fi
+                else
+                    log_info "Cask $tool_name_iter ist nicht installiert."
+                fi
+            else
+                if [[ "${DRY_RUN:-false}" == true ]]; then
+                    log_info "[DRY RUN] Würde Deinstallation von Tool '$tool_name_iter' prüfen."
+                # shellcheck disable=SC2086
+                elif $PKG_LIST_CMD $tool_name_iter &>/dev/null; then
+                    # shellcheck disable=SC2086
+                    if execute_or_dryrun "Tool $tool_name_iter entfernen" $PKG_UNINSTALL_CMD --force "$tool_name_iter"; then
+                        log_success "🗑️ Tool $tool_name_iter entfernt."
+                        [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter")
+                    fi
+                else
+                    log_info "Tool $tool_name_iter ist nicht installiert."
+                fi
+            fi
+        done
+    else
+        log_info "Keine Tools zur Deinstallation markiert."
+    fi
+
 
     if [[ -n "$PKG_AUTOREMOVE_CMD" ]]; then
         confirm_autoremove=false
@@ -177,7 +214,8 @@ else
             log_info "Automatische Zustimmung zu '$PKG_AUTOREMOVE_CMD' durch --yes Flag."
         else
             read -p "Möchtest du '$PKG_AUTOREMOVE_CMD' ausführen, um verwaiste Abhängigkeiten zu entfernen? (y/N): " confirm_autoremove_input
-            if [[ "$confirm_autoremove_input" =~ ^[Yy]$ ]]; then
+            local autoremove_choice="${confirm_autoremove_input:-N}"
+            if [[ "$autoremove_choice" =~ ^[Yy]$ ]]; then
                 confirm_autoremove=true
             fi
         fi
@@ -194,11 +232,20 @@ fi
 
 if [[ "${DRY_RUN:-false}" == false && "$ONLY_CLEANUP_MODE" == false && ${#REMOVED_TOOLS_LIST[@]} -gt 0 ]]; then
     log_info "\nFolgende Tools/Casks wurden erfolgreich entfernt:"
-    for removed_tool in "${REMOVED_TOOLS_LIST[@]}"; do
-        echo "  - $removed_tool"
+    for removed_tool_iter in "${REMOVED_TOOLS_LIST[@]}"; do
+        echo "  - $removed_tool_iter"
     done
 elif [[ "${DRY_RUN:-false}" == false && "$ONLY_CLEANUP_MODE" == false ]]; then
     log_info "Keine Tools/Casks wurden im Rahmen dieser Deinstallation entfernt."
+fi
+
+if [[ "$DRY_RUN" == false && -f "$MANIFEST_FILE" ]]; then
+    if [[ "$FORCE_REMOVE_ALL_CONFIGURED_TOOLS" == true || "$ONLY_CLEANUP_MODE" == true ]]; then
+        : 
+    elif [[ -f "$MANIFEST_FILE" ]]; then
+         : > "$MANIFEST_FILE"
+        log_info "Manifest-Datei $MANIFEST_FILE geleert."
+    fi
 fi
 
 log_success "✅ Deinstallation abgeschlossen."
