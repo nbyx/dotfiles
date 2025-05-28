@@ -1,34 +1,36 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-
 export DRY_RUN=false
 export PERFORM_UPDATES=false
-export INSTALL_MODE="full" 
+export INSTALL_MODE="full"
+export AUTO_CONFIRM=false
 
-
-while [[ $
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) export DRY_RUN=true; shift ;;
     --minimal) export INSTALL_MODE="minimal"; shift ;;
     --full) export INSTALL_MODE="full"; shift ;;
     --update) export PERFORM_UPDATES=true; shift ;;
+    -y|--yes) export AUTO_CONFIRM=true; shift ;;
     -h|--help)
-      echo "Usage: $0 [--dry-run] [--minimal | --full] [--update]"
-      echo "  --dry-run: Zeigt nur an, was getan würde."
-      echo "  --minimal: Installiert nur essentielle Komponenten."
-      echo "  --full:    Installiert alle Features (Standard)."
-      echo "  --update:  Versucht, Oh My Zsh und geklonte Plugins/Themes zu aktualisieren."
+      echo "Usage: $0 [OPTIONS]"
+      echo "Options:"
+      echo "  --dry-run          Zeigt nur an, was getan würde."
+      echo "  --minimal          Installiert nur essentielle Komponenten."
+      echo "  --full             Installiert alle Features (Standard)."
+      echo "  --update           Versucht, OMZ und geklonte Plugins/Themes zu aktualisieren."
+      echo "  -y, --yes          Automatische Zustimmung für alle Abfragen."
       exit 0 ;;
     *) echo "Unbekannte Option: $1"; exit 1 ;;
   esac
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-
+# shellcheck source=lib/utils.sh
 source "$SCRIPT_DIR/lib/utils.sh"
 
-log_step "Starte Dotfiles Installation (Modus: $INSTALL_MODE, Dry Run: $DRY_RUN, Updates: $PERFORM_UPDATES)"
+log_step "Starte Dotfiles Installation (Modus: $INSTALL_MODE, Dry Run: $DRY_RUN, Updates: $PERFORM_UPDATES, Auto-Confirm: $AUTO_CONFIRM)"
 date
 
 if [[ "$DRY_RUN" == false ]]; then
@@ -38,7 +40,7 @@ if [[ "$DRY_RUN" == false ]]; then
     elif [[ -f "$ZSHRC_BACKUP_FILE" ]]; then
         log_info "Backup-Datei $ZSHRC_BACKUP_FILE existiert bereits."
     fi
-    if [[ ! -f "$ZSHRC_DEST" ]]; then 
+    if [[ ! -f "$ZSHRC_DEST" ]]; then
         log_info "$ZSHRC_DEST nicht gefunden, erstelle leere Datei."
         touch "$ZSHRC_DEST"
     fi
@@ -78,9 +80,20 @@ else
         log_info "     Ein Backup deiner vorherigen .zshrc (falls vorhanden) liegt unter '$ZSHRC_BACKUP_FILE'."
     fi
     echo ""
-    read -p "Möchtest du die Shell jetzt neu starten (exec zsh -l)? (Y/n): " -r restart_choice
-    restart_choice=${restart_choice:-Y}
-    if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
+
+    confirm_shell_restart=false
+    if [[ "$AUTO_CONFIRM" == true ]]; then
+        confirm_shell_restart=true
+        log_info "Automatische Zustimmung zum Shell-Neustart durch --yes Flag."
+    else
+        read -p "Möchtest du die Shell jetzt neu starten (exec zsh -l)? (Y/n): " -r restart_choice
+        restart_choice=${restart_choice:-Y}
+        if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
+            confirm_shell_restart=true
+        fi
+    fi
+
+    if $confirm_shell_restart; then
       log_info "Starte Zsh neu..."
       exec zsh -l
     else

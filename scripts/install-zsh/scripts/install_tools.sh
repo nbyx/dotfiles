@@ -1,31 +1,29 @@
 #!/usr/bin/env bash
 
+# shellcheck source=../lib/utils.sh
 source "$(dirname "$0")/../lib/utils.sh"
 
 DRY_RUN="${DRY_RUN:-false}"
 PERFORM_UPDATES="${PERFORM_UPDATES:-false}"
 INSTALL_MODE="${INSTALL_MODE:-full}"
-declare -a INSTALLED_TOOLS_BY_SCRIPT=() 
-
+AUTO_CONFIRM="${AUTO_CONFIRM:-false}" # Nimmt den exportierten Wert von install.sh
+declare -a INSTALLED_TOOLS_BY_SCRIPT=()
 
 function setup_package_manager() {
   log_step "Paketmanager einrichten (Homebrew)"
   
   local brew_executable_path=""
-  
   if [[ -x "/opt/homebrew/bin/brew" ]]; then brew_executable_path="/opt/homebrew/bin/brew";
   elif [[ -x "/usr/local/bin/brew" ]]; then brew_executable_path="/usr/local/bin/brew";
-  elif command_exists "brew"; then brew_executable_path=$(command -v brew); 
+  elif command_exists "brew"; then brew_executable_path=$(command -v brew);
   fi
 
   if [[ -z "$brew_executable_path" ]]; then
     log_info "🍺 Homebrew nicht gefunden. Installiere Homebrew..."
     if ! execute_or_dryrun "Homebrew Installation" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" -- --non-interactive; then
-        
-        [[ "$DRY_RUN" == false ]] && exit 1 
+        [[ "$DRY_RUN" == false ]] && exit 1
     fi
     [[ "$DRY_RUN" == false ]] && log_success "✅ Homebrew installiert."
-    
     if [[ -x "/opt/homebrew/bin/brew" ]]; then brew_executable_path="/opt/homebrew/bin/brew";
     elif [[ -x "/usr/local/bin/brew" ]]; then brew_executable_path="/usr/local/bin/brew"; fi
     
@@ -37,7 +35,6 @@ function setup_package_manager() {
     log_success "Homebrew ist bereits installiert."
   fi
 
-  
   if [[ -n "$brew_executable_path" ]]; then
     if [[ "$DRY_RUN" == false ]]; then
         log_info "Aktiviere Homebrew für die aktuelle Shell-Sitzung..."
@@ -47,7 +44,7 @@ function setup_package_manager() {
     fi
     local homebrew_shellenv_block_content
     read -r -d '' homebrew_shellenv_block_content <<EOF
-
+# Initialize Homebrew environment (added by dotfiles installer)
 if [ -x "$brew_executable_path" ]; then
   eval "\$($brew_executable_path shellenv)"
 fi
@@ -61,21 +58,31 @@ EOF
   PKG_INSTALL_CMD="brew install"
   PKG_LIST_CMD="brew list"
 
-  
   if [[ "$DRY_RUN" == false ]] && ( [[ "$PERFORM_UPDATES" == true ]] || [[ "$INSTALL_MODE" == "full" ]] ); then
     if execute_or_dryrun "Homebrew Formeln aktualisieren" brew update; then
         [[ "$DRY_RUN" == false ]] && log_success "✅ Homebrew Formeln aktualisiert."
     fi
   fi
-  if [[ "$DRY_RUN" == false && "$PERFORM_UPDATES" == true ]]; then
+
+  if [[ "$DRY_RUN" == false && "$PERFORM_UPDATES" == true ]]; then # --update impliziert Upgrade
     if execute_or_dryrun "Alle Homebrew Pakete aktualisieren" brew upgrade; then
         [[ "$DRY_RUN" == false ]] && log_success "✅ Alle Homebrew Pakete aktualisiert."
     fi
-  elif [[ "$DRY_RUN" == false && "$INSTALL_MODE" == "full" && "$PERFORM_UPDATES" == false ]]; then 
-      read -p "Möchtest du alle installierten Homebrew-Pakete aktualisieren? (y/N): " -r upgrade_choice
-      upgrade_choice=${upgrade_choice:-N}
-      if [[ "$upgrade_choice" =~ ^[Yy]$ ]]; then
-        if execute_or_dryrun "Alle Homebrew Pakete aktualisieren (Benutzerauswahl)" brew upgrade; then
+  elif [[ "$DRY_RUN" == false && "$INSTALL_MODE" == "full" && "$PERFORM_UPDATES" == false ]]; then # Nur im Full-Modus fragen, wenn nicht schon --update
+      confirm_upgrade=false
+      if [[ "$AUTO_CONFIRM" == true ]]; then # Hier wird AUTO_CONFIRM verwendet
+          confirm_upgrade=true
+          log_info "Automatische Zustimmung zum Homebrew-Paket-Upgrade durch --yes Flag."
+      else
+          read -p "Möchtest du alle installierten Homebrew-Pakete aktualisieren? (y/N): " -r upgrade_choice
+          upgrade_choice=${upgrade_choice:-N}
+          if [[ "$upgrade_choice" =~ ^[Yy]$ ]]; then
+              confirm_upgrade=true
+          fi
+      fi
+
+      if $confirm_upgrade; then
+        if execute_or_dryrun "Alle Homebrew Pakete aktualisieren (Benutzerauswahl/--yes)" brew upgrade; then
             log_success "✅ Alle Homebrew Pakete aktualisiert."
         fi
       else
@@ -83,7 +90,6 @@ EOF
       fi
   fi
 }
-
 
 function install_tools_from_file() {
   local tool_file="$1"
@@ -105,7 +111,6 @@ function install_tools_from_file() {
   done < "$tool_file"
 }
 
-
 setup_package_manager
 
 ESSENTIALS_TOOLS_FILE="$(dirname "$0")/../config/brew_essentials.txt"
@@ -115,16 +120,13 @@ export SELECTED_OPTIONAL_TOOLS_LIST=""
 
 if [[ "$INSTALL_MODE" == "full" ]]; then
     OPTIONAL_TOOLS_FILE="$(dirname "$0")/../config/brew_optionals.txt"
-
     log_info "Installiere alle optionalen Tools (Modus: full)..."
     install_tools_from_file "$OPTIONAL_TOOLS_FILE" "optionale"
-
     if [[ -f "$OPTIONAL_TOOLS_FILE" ]]; then
         temp_selected_opts=()
         while IFS= read -r tool_name || [[ -n "$tool_name" ]]; do
             tool_name=$(echo "$tool_name" | xargs)
             [[ "$tool_name" =~ ^#.*$ || -z "$tool_name" ]] && continue
-            # Prüfe, ob das Tool jetzt installiert ist
             if $PKG_LIST_CMD "$tool_name" &>/dev/null; then
                 temp_selected_opts+=("$tool_name")
             fi
