@@ -7,6 +7,10 @@ export PERFORM_UPDATES=false
 export INSTALL_MODE="full"
 export AUTO_CONFIRM=false
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# shellcheck source=lib/utils.sh
+source "$SCRIPT_DIR/lib/utils.sh" 
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) export DRY_RUN=true; shift ;;
@@ -27,12 +31,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-# shellcheck source=lib/utils.sh
-source "$SCRIPT_DIR/lib/utils.sh"
 
 log_step "Starte Dotfiles Installation (Modus: $INSTALL_MODE, Dry Run: $DRY_RUN, Updates: $PERFORM_UPDATES, Auto-Confirm: $AUTO_CONFIRM)"
 date
+
+if ! detect_and_load_package_manager_driver; then
+    log_error "Konnte keinen passenden Paketmanager-Treiber laden. Breche ab."
+    exit 1
+fi
+log_info "Paketmanager $PM_NAME wird verwendet."
+
 
 if [[ "$DRY_RUN" == false ]]; then
     if [[ -f "$ZSHRC_DEST" ]] && [[ ! -f "$ZSHRC_BACKUP_FILE" ]]; then

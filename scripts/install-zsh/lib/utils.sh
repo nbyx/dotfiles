@@ -210,87 +210,47 @@ function manage_config_block() {
     return 0
 }
 
-PKG_CMD=""
-PKG_INSTALL_CMD=""
-PKG_LIST_CMD=""
-PKG_CASK_INSTALL_CMD=""
-PKG_CASK_LIST_CMD=""
-PKG_MANAGER_NAME=""
+export PM_NAME="" # Exportiere PM_NAME, damit Sub-Skripte es lesen können
 
-function install_package() {
-  local package_name="$1"
-  local dry_run_flag="${DRY_RUN:-false}"
-  
-  if [[ -z "$PKG_CMD" || -z "$PKG_INSTALL_CMD" || -z "$PKG_LIST_CMD" ]]; then
-    log_error "Paketmanager-Befehle nicht initialisiert. Kann '$package_name' nicht installieren."
-    echo "install_failed_no_pkg_manager"
-    return 1
-  fi
+function pkg_init() { log_error "Paketmanager-Treiber nicht initialisiert (pkg_init)."; return 1; }
+function pkg_is_installed() { log_error "pkg_is_installed nicht implementiert für $PM_NAME."; return 1; }
+function pkg_install() { log_error "pkg_install nicht implementiert für $PM_NAME."; echo "install_failed_not_implemented"; return 1; }
+function pkg_uninstall() { log_error "pkg_uninstall nicht implementiert für $PM_NAME."; return 1; }
+function pkg_update_index() { log_error "pkg_update_index nicht implementiert für $PM_NAME."; return 1; }
+function pkg_update_all() { log_error "pkg_update_all nicht implementiert für $PM_NAME."; return 1; }
+function pkg_autoremove() { log_error "pkg_autoremove nicht implementiert für $PM_NAME."; return 1; }
 
-  local is_installed=false
-  if [[ "$PKG_CMD" == "brew" ]]; then
-    # shellcheck disable=SC2086
-    $PKG_LIST_CMD $package_name &>/dev/null && is_installed=true
-  else
-    log_warn "Installationsprüfung für $PKG_CMD nicht implementiert."
-  fi
+function pkg_cask_is_installed() { log_warn "pkg_cask_is_installed nicht implementiert für $PM_NAME."; return 1; }
+function pkg_cask_install() { log_warn "pkg_cask_install nicht implementiert für $PM_NAME."; echo "install_failed_not_implemented"; return 1; }
+function pkg_cask_uninstall() { log_warn "pkg_cask_uninstall nicht implementiert für $PM_NAME."; return 1; }
 
-  if ! $is_installed; then
-    log_info "📦 Installiere $package_name..."
-    # shellcheck disable=SC2086
-    if execute_or_dryrun "$package_name Installation" $PKG_INSTALL_CMD $package_name; then
-        if [[ "$dry_run_flag" == false ]]; then
-            log_success "✅ $package_name installiert."
-            echo "newly_installed"
+function detect_and_load_package_manager_driver() {
+    log_step "Erkenne und lade Paketmanager-Treiber..."
+    local base_dir_pm 
+    base_dir_pm="$(dirname "${BASH_SOURCE[0]}")/package_managers" 
+
+    if command_exists "brew"; then
+        log_info "Homebrew erkannt."
+        if [[ -f "$base_dir_pm/pm_brew.sh" ]]; then
+            
+            source "$base_dir_pm/pm_brew.sh"
+            PM_NAME="Homebrew" 
         else
-            echo "dry_run_would_install"
+            log_error "Homebrew-Treiber ($base_dir_pm/pm_brew.sh) nicht gefunden."
+            return 1 
         fi
-        return 0
+    elif command_exists "apt-get"; then
+        log_info "APT (Debian/Ubuntu) erkannt."
+        log_error "APT-Treiber ist noch nicht implementiert."
+        return 1
     else
-        echo "install_failed"
+        log_error "Kein unterstützter Paketmanager gefunden."
         return 1
     fi
-  else
-    log_success "$package_name ist bereits installiert."
-    echo "already_installed"
-    return 0
-  fi
-}
 
-function install_cask_package() {
-  local cask_name="$1"
-  local dry_run_flag="${DRY_RUN:-false}"
-
-  if [[ "$PKG_MANAGER_NAME" != "Homebrew" ]]; then
-    log_warn "Cask-Installation ist spezifisch für Homebrew."
-    echo "install_failed_wrong_pkg_manager"
-    return 1
-  fi
-  if [[ -z "$PKG_CASK_INSTALL_CMD" || -z "$PKG_CASK_LIST_CMD" ]]; then
-    log_error "Cask-Paketmanager-Befehle nicht initialisiert. Kann '$cask_name' nicht installieren."
-    echo "install_failed_no_cask_cmd"
-    return 1
-  fi
-
-  # shellcheck disable=SC2086
-  if ! $PKG_CASK_LIST_CMD $cask_name &>/dev/null; then
-    log_info "📦 Installiere Cask $cask_name..."
-    # shellcheck disable=SC2086
-    if execute_or_dryrun "$cask_name Cask Installation" $PKG_CASK_INSTALL_CMD $cask_name; then
-        if [[ "$dry_run_flag" == false ]]; then
-            log_success "✅ Cask $cask_name installiert."
-            echo "newly_installed"
-        else
-            echo "dry_run_would_install"
-        fi
-        return 0
-    else
-        echo "install_failed"
+    if ! $pkg_init; then 
+        log_error "Initialisierung des Paketmanager-Treibers ($PM_NAME) fehlgeschlagen."
         return 1
     fi
-  else
-    log_success "Cask $cask_name ist bereits installiert."
-    echo "already_installed"
     return 0
-  fi
 }

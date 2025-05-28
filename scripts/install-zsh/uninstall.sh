@@ -35,6 +35,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # shellcheck source=lib/utils.sh
 source "$SCRIPT_DIR/lib/utils.sh"
 
+
+pm_driver_loaded_for_uninstall=false
+if detect_and_load_package_manager_driver; then
+    pm_driver_loaded_for_uninstall=true
+else
+    log_warn "Konnte keinen Paketmanager-Treiber für Deinstallation laden. Tool-Deinstallation wird übersprungen."
+fi
+
+
 log_step "Starte Deinstallation (Dry Run: $DRY_RUN, Auto-Confirm: $AUTO_CONFIRM, Only-Cleanup: $ONLY_CLEANUP_MODE, Force-Remove: $FORCE_REMOVE_ALL_CONFIGURED_TOOLS)"
 
 confirm_uninstall=false
@@ -63,21 +72,20 @@ if ! $confirm_uninstall; then
     exit 0
 fi
 
-PKG_CMD="brew"
-PKG_LIST_CMD="brew list"
-PKG_UNINSTALL_CMD="brew uninstall"
-PKG_AUTOREMOVE_CMD="brew autoremove --force"
-PKG_CASK_LIST_CMD="brew list --cask"
-PKG_CASK_UNINSTALL_CMD="brew uninstall --cask"
-
 log_info "🗑️  Entferne Oh My Zsh..."
-if [[ -d "$OMZ_DIR" ]]; then
-    if execute_or_dryrun "Oh My Zsh entfernen" rm -rf "$OMZ_DIR"; then
-        [[ "${DRY_RUN:-false}" == false ]] && log_success "🗑️ Oh My Zsh entfernt."
+if [[ -n "$OMZ_DIR" && "$OMZ_DIR" == "$HOME/.oh-my-zsh" ]]; then
+    if [[ -d "$OMZ_DIR" ]]; then
+        if execute_or_dryrun "Oh My Zsh entfernen ($OMZ_DIR)" rm -rf "$OMZ_DIR"; then
+            [[ "${DRY_RUN:-false}" == false ]] && log_success "🗑️ Oh My Zsh entfernt."
+        fi
+    else
+        log_info "Oh My Zsh Verzeichnis ($OMZ_DIR) nicht gefunden."
     fi
 else
-    log_info "Oh My Zsh Verzeichnis ($OMZ_DIR) nicht gefunden."
+    log_error "FEHLER: \$OMZ_DIR ist nicht korrekt auf '$HOME/.oh-my-zsh' gesetzt oder ist leer. Breche das Entfernen von OMZ ab, um Datenverlust zu verhindern."
+    log_error "Aktueller Wert von \$OMZ_DIR: '$OMZ_DIR'"
 fi
+
 
 log_info "🗑️  Entferne FZF Preview Skript..."
 fzf_preview_script_path="$HOME/.config/fzf/fzf-preview.sh"
@@ -129,12 +137,14 @@ else
 fi
 
 if [[ "$ONLY_CLEANUP_MODE" == true ]]; then
-    log_info "--only-cleanup Modus: Überspringe Deinstallation von Tools, Casks und brew autoremove."
+    log_info "--only-cleanup Modus: Überspringe Deinstallation von Tools, Casks und Autoremove."
+elif ! $pm_driver_loaded_for_uninstall; then
+    log_warn "Kein Paketmanager-Treiber geladen. Überspringe Deinstallation von Tools, Casks und Autoremove."
 else
     TOOLS_TO_UNINSTALL=()
     if [[ "$FORCE_REMOVE_ALL_CONFIGURED_TOOLS" == true ]]; then
         log_warn "FORCE_REMOVE_ALL_CONFIGURED_TOOLS ist aktiv: Versuche alle Tools aus config/*.txt zu entfernen."
-        if [[ -f "$SCRIPT_DIR/config/brew_essentials.txt" ]]; then
+        if [[ -f "$SCRIPT_DIR/config/brew_essentials.txt" ]]; then 
             tool_raw_ess=""
             while IFS= read -r tool_raw_ess || [[ -n "$tool_raw_ess" ]]; do
                 local tool_ess
@@ -142,7 +152,7 @@ else
                 TOOLS_TO_UNINSTALL+=("$tool_ess")
             done < "$SCRIPT_DIR/config/brew_essentials.txt"
         fi
-        if [[ -f "$SCRIPT_DIR/config/brew_optionals.txt" ]]; then
+        if [[ -f "$SCRIPT_DIR/config/brew_optionals.txt" ]]; then 
             tool_raw_opt=""
             while IFS= read -r tool_raw_opt || [[ -n "$tool_raw_opt" ]]; do
                 local tool_opt
@@ -170,35 +180,19 @@ else
 
         for tool_name_iter in "${unique_tools_to_uninstall[@]}"; do
             is_cask=false
-            case "$tool_name_iter" in
-                iterm2|font-hack-nerd-font) is_cask=true ;;
-            esac
+            if [[ "$PM_NAME" == "Homebrew" ]]; then
+                case "$tool_name_iter" in
+                    iterm2|font-hack-nerd-font) is_cask=true ;;
+                esac
+            fi
 
             if $is_cask; then
-                if [[ "${DRY_RUN:-false}" == true ]]; then
-                    log_info "[DRY RUN] Würde Deinstallation von Cask '$tool_name_iter' prüfen."
-                # shellcheck disable=SC2086
-                elif $PKG_CASK_LIST_CMD $tool_name_iter &>/dev/null; then
-                    # shellcheck disable=SC2086
-                    if execute_or_dryrun "Cask $tool_name_iter entfernen" $PKG_CASK_UNINSTALL_CMD --force "$tool_name_iter"; then
-                        log_success "🗑️ Cask $tool_name_iter entfernt."
-                        [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter (cask)")
-                    fi
-                else
-                    log_info "Cask $tool_name_iter ist nicht installiert."
+                if $pkg_cask_uninstall "$tool_name_iter" true; then 
+                    [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter (cask)")
                 fi
             else
-                if [[ "${DRY_RUN:-false}" == true ]]; then
-                    log_info "[DRY RUN] Würde Deinstallation von Tool '$tool_name_iter' prüfen."
-                # shellcheck disable=SC2086
-                elif $PKG_LIST_CMD $tool_name_iter &>/dev/null; then
-                    # shellcheck disable=SC2086
-                    if execute_or_dryrun "Tool $tool_name_iter entfernen" $PKG_UNINSTALL_CMD --force "$tool_name_iter"; then
-                        log_success "🗑️ Tool $tool_name_iter entfernt."
-                        [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter")
-                    fi
-                else
-                    log_info "Tool $tool_name_iter ist nicht installiert."
+                if $pkg_uninstall "$tool_name_iter" true; then 
+                    [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter")
                 fi
             fi
         done
@@ -206,26 +200,21 @@ else
         log_info "Keine Tools zur Deinstallation markiert."
     fi
 
-
-    if [[ -n "$PKG_AUTOREMOVE_CMD" ]]; then
-        confirm_autoremove=false
-        if [[ "$AUTO_CONFIRM" == true ]]; then
+    confirm_autoremove=false
+    if [[ "$AUTO_CONFIRM" == true ]]; then
+        confirm_autoremove=true
+        log_info "Automatische Zustimmung zum Autoremove durch --yes Flag."
+    else
+        read -p "Möchtest du '$PM_NAME autoremove' ausführen, um verwaiste Abhängigkeiten zu entfernen? (y/N): " confirm_autoremove_input
+        local autoremove_choice="${confirm_autoremove_input:-N}"
+        if [[ "$autoremove_choice" =~ ^[Yy]$ ]]; then
             confirm_autoremove=true
-            log_info "Automatische Zustimmung zu '$PKG_AUTOREMOVE_CMD' durch --yes Flag."
-        else
-            read -p "Möchtest du '$PKG_AUTOREMOVE_CMD' ausführen, um verwaiste Abhängigkeiten zu entfernen? (y/N): " confirm_autoremove_input
-            local autoremove_choice="${confirm_autoremove_input:-N}"
-            if [[ "$autoremove_choice" =~ ^[Yy]$ ]]; then
-                confirm_autoremove=true
-            fi
         fi
-        
-        if $confirm_autoremove; then
-            log_info "Führe '$PKG_AUTOREMOVE_CMD' aus..."
-            # shellcheck disable=SC2086
-            if execute_or_dryrun "Verwaiste Abhängigkeiten entfernen" $PKG_AUTOREMOVE_CMD; then
-                [[ "${DRY_RUN:-false}" == false ]] && log_success "✅ Verwaiste Abhängigkeiten entfernt.";
-            fi
+    fi
+    
+    if $confirm_autoremove; then
+        if ! $pkg_autoremove; then
+            log_warn "Autoremove fehlgeschlagen."
         fi
     fi
 fi
