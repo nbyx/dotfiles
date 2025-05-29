@@ -2,6 +2,23 @@
 set -eo pipefail
 set -u
 
+COLOR_RESET='\033[0m'
+COLOR_GREEN='\033[1;32m'
+COLOR_YELLOW='\033[1;33m'
+COLOR_RED='\033[1;31m'
+COLOR_BLUE='\033[1;34m'
+COLOR_CYAN='\033[1;36m'
+
+if [[ -t 1 ]] && type tput &>/dev/null; then
+    if [[ $(tput colors 2>/dev/null || echo 0) -ge 8 ]]; then
+        :
+    else
+        COLOR_RESET=''; COLOR_GREEN=''; COLOR_YELLOW=''; COLOR_RED=''; COLOR_BLUE=''; COLOR_CYAN='';
+    fi
+else
+    COLOR_RESET=''; COLOR_GREEN=''; COLOR_YELLOW=''; COLOR_RED=''; COLOR_BLUE=''; COLOR_CYAN='';
+fi
+
 # shellcheck disable=SC2034
 ZSHRC_DEST="$HOME/.zshrc"
 # shellcheck disable=SC2034
@@ -31,12 +48,6 @@ ZSHRC_DOTFILES_FZF_ADVANCED_CONFIG_END_MARKER="# DOTFILES_FZF_ADVANCED_CONFIG_EN
 ZSHRC_DOTFILES_TOOL_ALIASES_START_MARKER="# DOTFILES_TOOL_ALIASES_START"
 # shellcheck disable=SC2034
 ZSHRC_DOTFILES_TOOL_ALIASES_END_MARKER="# DOTFILES_TOOL_ALIASES_END"
-
-COLOR_RESET='\033[0m'
-COLOR_GREEN='\033[1;32m'
-COLOR_YELLOW='\033[1;33m'
-COLOR_RED='\033[1;31m'
-COLOR_BLUE='\033[1;34m'
 
 function log_step { echo -e "\n${COLOR_BLUE}➡️  $1${COLOR_RESET}"; }
 function log_success { echo -e "${COLOR_GREEN}✅ $1${COLOR_RESET}"; }
@@ -77,6 +88,73 @@ function command_exists() {
   command -v "$1" &>/dev/null
 }
 
+function try_install_gum() {
+    if [[ "${DRY_RUN:-false}" == true ]]; then
+        log_info "[DRY RUN] Würde Installation von 'gum' prüfen und ggf. anbieten."
+        return 1 
+    fi
+
+    log_warn "'gum' nicht gefunden. Es wird für eine bessere interaktive Erfahrung empfohlen."
+    local install_gum_confirm
+    read -p "Möchtest du 'gum' jetzt über $PM_NAME installieren? (Y/n): " -r install_gum_confirm
+    local choice_val_gum="${install_gum_confirm:-Y}"
+
+    if [[ "$choice_val_gum" =~ ^[Yy]$ ]]; then
+        log_info "Installiere 'gum'..."
+        if ! type "$pkg_install" &>/dev/null || [[ -z "$pkg_install" ]]; then
+            log_error "Fehler: pkg_install Variable ('$pkg_install') zeigt nicht auf eine gültige Funktion. Kann 'gum' nicht installieren."
+            return 1
+        fi
+        
+        if "$pkg_install" "gum" > /dev/null; then 
+            if command_exists "gum"; then 
+                log_success "'gum' erfolgreich installiert/gefunden."
+                return 0 
+            else
+                log_error "Installation von 'gum' scheint fehlgeschlagen zu sein (Befehl nicht gefunden nach Installation)."
+                return 1
+            fi
+        else
+            log_error "Fehler bei der Installation von 'gum' (Aufruf von $pkg_install fehlgeschlagen)."
+            return 1
+        fi
+    else
+        log_warn "Installation von 'gum' übersprungen."
+        return 1 
+    fi
+}
+
+function gum_confirm_wrapper() {
+    local prompt_message="$1"
+    local read_default="${2:-N}"
+
+    if [[ "${AUTO_CONFIRM:-false}" == true ]]; then
+        log_info "Automatische Zustimmung für \"$prompt_message\" durch --yes Flag."
+        return 0
+    fi
+
+    if ! command_exists "gum"; then
+        if ! try_install_gum; then 
+            log_warn "Fallback zu 'read -p' für Bestätigung, da 'gum' nicht verfügbar/installiert wurde."
+            local user_choice
+            read -p "$prompt_message ($read_default): " -r user_choice
+            local choice_val="${user_choice:-$read_default}"
+            if [[ "$choice_val" =~ ^[Yy]$ ]]; then
+                return 0
+            else
+                return 1
+            fi
+        fi
+    fi
+    
+    if gum confirm "$prompt_message"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+
 function append_if_missing() {
   local file="$1"
   local line="$2"
@@ -111,9 +189,26 @@ function manage_config_block() {
     local target_file="$4"
     local dry_run_flag="${DRY_RUN:-false}"
     local uninstall_flag="${UNINSTALL_MODE:-false}"
-    local temp_file
-    temp_file=$(mktemp) || { log_error "Konnte temporäre Datei nicht erstellen."; return 1; }
-    trap 'rm -f "$temp_file"' RETURN
+    local temp_output_file="" 
+    local temp_content_file=""
+
+    _cleanup_temp_files() {
+        set +u 
+        if [[ -n "$temp_output_file" && -f "$temp_output_file" ]]; then
+            rm -f "$temp_output_file"
+        fi
+        if [[ -n "$temp_content_file" && -f "$temp_content_file" ]]; then
+            rm -f "$temp_content_file"
+        fi
+        set -u 
+    }
+    trap _cleanup_temp_files RETURN EXIT SIGINT SIGTERM
+
+    temp_output_file=$(mktemp)
+    if [[ -z "$temp_output_file" || ! -f "$temp_output_file" ]]; then
+        log_error "Konnte temporäre Ausgabedatei nicht erstellen mit mktemp."
+        return 1
+    fi
 
     if [[ "$dry_run_flag" == true && "$uninstall_flag" == false ]]; then
         log_info "[DRY RUN] Würde Block '$start_marker' in '$target_file' verwalten mit Inhalt:"
@@ -135,8 +230,8 @@ function manage_config_block() {
             $0 == sm { printing = 0; next }
             $0 == em { printing = 1; next }
             printing { print }
-        ' "$target_file" > "$temp_file"
-        if cp "$temp_file" "$target_file"; then
+        ' "$target_file" > "$temp_output_file"
+        if cp "$temp_output_file" "$target_file"; then
             log_success "🗑️ Block '$start_marker' aus '$target_file' entfernt."
         else
             log_error "Fehler beim Entfernen des Blocks '$start_marker' aus '$target_file'."
@@ -157,26 +252,28 @@ function manage_config_block() {
         log_info "Datei $target_file erstellt."
     fi
 
+    temp_content_file=$(mktemp)
+    if [[ -z "$temp_content_file" || ! -f "$temp_content_file" ]]; then
+        log_error "Konnte temporäre Inhaltsdatei nicht erstellen mit mktemp."
+        return 1
+    fi
+    echo -e "$block_content" > "$temp_content_file"
+
     awk -v sm="$start_marker" \
         -v em="$end_marker" \
-        -v content="$block_content" \
+        -v content_file="$temp_content_file" \
         '
         BEGIN {
             in_block = 0;
             block_written = 0;
-            if (content != "") {
-                split(content, lines, "\n");
-                lines_len = length(lines);
-            } else {
-                lines_len = 0; 
-            }
         }
         $0 == sm {
             if (!block_written) {
                 print sm;
-                for (i=1; i<=lines_len; i++) {
-                    print lines[i];
+                while ((getline line < content_file) > 0) {
+                    print line;
                 }
+                close(content_file); 
                 print em;
                 block_written = 1;
             }
@@ -192,52 +289,65 @@ function manage_config_block() {
             if (!block_written) {
                 if (NR > 0 && prev_line != "") print "";
                 print sm;
-                for (i=1; i<=lines_len; i++) {
-                    print lines[i];
+                while ((getline line < content_file) > 0) {
+                    print line;
                 }
+                close(content_file);
                 print em;
             }
         }
         { prev_line = $0 }
-        ' "$target_file" > "$temp_file"
+        ' "$target_file" > "$temp_output_file"
 
-    if cp "$temp_file" "$target_file"; then
+    if cp "$temp_output_file" "$target_file"; then
         log_success "📝 Block '$start_marker' in '$target_file' aktualisiert/hinzugefügt."
     else
-        log_error "Fehler beim Aktualisieren des Blocks '$start_marker' aus '$target_file'."
+        local cp_exit_code=$?
+        log_error "Fehler beim Kopieren von temp_output_file nach '$target_file' (Exit Code: $cp_exit_code)."
+        if [[ -f "$temp_output_file" ]]; then
+            log_error "Inhalt von temp_output_file ($temp_output_file):"
+            cat "$temp_output_file"
+        else
+            log_error "temp_output_file ($temp_output_file) wurde nicht erstellt oder ist nicht lesbar."
+        fi
+        if [[ -f "$target_file" ]]; then
+            log_error "Berechtigungen von target_file ($target_file):"
+            ls -l "$target_file"
+        else
+            log_error "target_file ($target_file) existiert nicht."
+        fi
         return 1
     fi
     return 0
 }
 
-export PM_NAME="" # Exportiere PM_NAME, damit Sub-Skripte es lesen können
+PM_NAME="" 
 
-function pkg_init() { log_error "Paketmanager-Treiber nicht initialisiert (pkg_init)."; return 1; }
-function pkg_is_installed() { log_error "pkg_is_installed nicht implementiert für $PM_NAME."; return 1; }
-function pkg_install() { log_error "pkg_install nicht implementiert für $PM_NAME."; echo "install_failed_not_implemented"; return 1; }
-function pkg_uninstall() { log_error "pkg_uninstall nicht implementiert für $PM_NAME."; return 1; }
-function pkg_update_index() { log_error "pkg_update_index nicht implementiert für $PM_NAME."; return 1; }
-function pkg_update_all() { log_error "pkg_update_all nicht implementiert für $PM_NAME."; return 1; }
-function pkg_autoremove() { log_error "pkg_autoremove nicht implementiert für $PM_NAME."; return 1; }
+pkg_init=""
+pkg_is_installed=""
+pkg_install=""
+pkg_uninstall=""
+pkg_update_index=""
+pkg_update_all=""
+pkg_autoremove=""
+pkg_cask_is_installed=""
+pkg_cask_install=""
+pkg_cask_uninstall=""
 
-function pkg_cask_is_installed() { log_warn "pkg_cask_is_installed nicht implementiert für $PM_NAME."; return 1; }
-function pkg_cask_install() { log_warn "pkg_cask_install nicht implementiert für $PM_NAME."; echo "install_failed_not_implemented"; return 1; }
-function pkg_cask_uninstall() { log_warn "pkg_cask_uninstall nicht implementiert für $PM_NAME."; return 1; }
 
 function detect_and_load_package_manager_driver() {
     log_step "Erkenne und lade Paketmanager-Treiber..."
     local base_dir_pm 
-    base_dir_pm="$(dirname "${BASH_SOURCE[0]}")/package_managers" 
+    base_dir_pm="$(dirname "${BASH_SOURCE[0]}")/package_managers"
 
     if command_exists "brew"; then
         log_info "Homebrew erkannt."
         if [[ -f "$base_dir_pm/pm_brew.sh" ]]; then
-            
+            # shellcheck source=package_managers/pm_brew.sh
             source "$base_dir_pm/pm_brew.sh"
-            PM_NAME="Homebrew" 
         else
             log_error "Homebrew-Treiber ($base_dir_pm/pm_brew.sh) nicht gefunden."
-            return 1 
+            return 1
         fi
     elif command_exists "apt-get"; then
         log_info "APT (Debian/Ubuntu) erkannt."
@@ -248,7 +358,16 @@ function detect_and_load_package_manager_driver() {
         return 1
     fi
 
-    if ! $pkg_init; then 
+    if [[ -z "$pkg_init" ]]; then
+        log_error "Paketmanager-Treiber wurde gesourct, aber pkg_init wurde nicht korrekt zugewiesen (ist leer)."
+        return 1
+    fi
+    if ! type "$pkg_init" &>/dev/null; then 
+        log_error "Der in pkg_init ('$pkg_init') zugewiesene Name ist keine gültige Funktion."
+        return 1
+    fi
+
+    if ! "$pkg_init"; then 
         log_error "Initialisierung des Paketmanager-Treibers ($PM_NAME) fehlgeschlagen."
         return 1
     fi

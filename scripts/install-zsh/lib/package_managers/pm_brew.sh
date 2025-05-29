@@ -6,9 +6,8 @@ function pm_brew_install_self_if_needed() {
     if ! command_exists "brew"; then
         log_info "🍺 Homebrew nicht gefunden. Installiere Homebrew..."
         if ! execute_or_dryrun "Homebrew Installation" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" -- --non-interactive; then
-            return 1
+            return 1 
         fi
-        [[ "${DRY_RUN:-false}" == false ]] && log_success "✅ Homebrew installiert."
     fi
     return 0
 }
@@ -44,7 +43,6 @@ EOF
     return 0
 }
 
-
 function pm_brew_init() {
     if ! pm_brew_install_self_if_needed; then
         return 1
@@ -70,11 +68,10 @@ function pm_brew_install() {
         echo "already_installed"
         return 0
     fi
-
-    log_info "📦 Installiere $package_name via Homebrew..."
+    
     if execute_or_dryrun "$package_name Homebrew Installation" brew install "$package_name"; then
         if [[ "$dry_run_flag" == false ]]; then
-            log_success "✅ $package_name installiert."
+            
             echo "newly_installed"
         else
             echo "dry_run_would_install"
@@ -98,9 +95,7 @@ function pm_brew_uninstall() {
         return 0 
     fi
 
-    log_info "🗑️  Entferne $package_name via Homebrew..."
     if execute_or_dryrun "$package_name Homebrew Deinstallation" brew "${uninstall_args[@]}"; then
-        [[ "${DRY_RUN:-false}" == false ]] && log_success "🗑️ $package_name entfernt."
         return 0
     else
         return 1
@@ -109,7 +104,6 @@ function pm_brew_uninstall() {
 
 function pm_brew_update_index() {
     if execute_or_dryrun "Homebrew Index aktualisieren (brew update)" brew update; then
-      [[ "${DRY_RUN:-false}" == false ]] && log_success "✅ Homebrew Index aktualisiert."
       return 0
     else
       return 1
@@ -118,7 +112,6 @@ function pm_brew_update_index() {
 
 function pm_brew_update_all() {
     if execute_or_dryrun "Alle Homebrew Pakete aktualisieren (brew upgrade)" brew upgrade; then
-      [[ "${DRY_RUN:-false}" == false ]] && log_success "✅ Alle Homebrew Pakete aktualisiert."
       return 0
     else
       return 1
@@ -126,8 +119,7 @@ function pm_brew_update_all() {
 }
 
 function pm_brew_autoremove() {
-    if execute_or_dryrun "Homebrew Autoremove" brew autoremove --force; then
-      [[ "${DRY_RUN:-false}" == false ]] && log_success "✅ Homebrew Autoremove erfolgreich."
+    if execute_or_dryrun "Homebrew Autoremove" brew autoremove; then
       return 0
     else
       return 1
@@ -148,10 +140,8 @@ function pm_brew_cask_install() {
         echo "already_installed"
         return 0
     fi
-    log_info "📦 Installiere Cask $cask_name via Homebrew..."
     if execute_or_dryrun "$cask_name Homebrew Cask Installation" brew install --cask "$cask_name"; then
         if [[ "$dry_run_flag" == false ]]; then
-            log_success "✅ Cask $cask_name installiert."
             echo "newly_installed"
         else
             echo "dry_run_would_install"
@@ -174,25 +164,23 @@ function pm_brew_cask_uninstall() {
         log_info "Cask $cask_name ist nicht via Homebrew installiert."
         return 0
     fi
-    log_info "🗑️  Entferne Cask $cask_name via Homebrew..."
     if execute_or_dryrun "$cask_name Homebrew Cask Deinstallation" brew "${uninstall_args[@]}"; then
-        [[ "${DRY_RUN:-false}" == false ]] && log_success "🗑️ Cask $cask_name entfernt."
         return 0
     else
         return 1
     fi
 }
 
-pkg_init="pm_brew_init"
-pkg_is_installed="pm_brew_is_installed"
-pkg_install="pm_brew_install"
-pkg_uninstall="pm_brew_uninstall"
-pkg_update_index="pm_brew_update_index"
-pkg_update_all="pm_brew_update_all"
-pkg_autoremove="pm_brew_autoremove"
+export pkg_init="pm_brew_init"
+export pkg_is_installed="pm_brew_is_installed"
+export pkg_install="pm_brew_install"
+export pkg_uninstall="pm_brew_uninstall"
+export pkg_update_index="pm_brew_update_index"
+export pkg_update_all="pm_brew_update_all"
+export pkg_autoremove="pm_brew_autoremove"
 
-pkg_cask_is_installed="pm_brew_cask_is_installed"
-pkg_cask_install="pm_brew_cask_install"
-pkg_cask_uninstall="pm_brew_cask_uninstall"
+export pkg_cask_is_installed="pm_brew_cask_is_installed"
+export pkg_cask_install="pm_brew_cask_install"
+export pkg_cask_uninstall="pm_brew_cask_uninstall"
 
-PM_NAME="Homebrew"
+export PM_NAME="Homebrew"

@@ -8,8 +8,10 @@ export INSTALL_MODE="full"
 export AUTO_CONFIRM=false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+export DOTFILES_ROOT_DIR="$SCRIPT_DIR" 
+
 # shellcheck source=lib/utils.sh
-source "$SCRIPT_DIR/lib/utils.sh" 
+source "$DOTFILES_ROOT_DIR/lib/utils.sh" 
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,51 +60,45 @@ elif [[ "$DRY_RUN" == true && ! -f "$ZSHRC_DEST" ]]; then
 fi
 
 log_info "Führe Tool-Installation aus..."
-if ! bash "$SCRIPT_DIR/scripts/install_tools.sh"; then
-    log_error "Tool-Installation fehlgeschlagen. Breche ab."
-    exit 1
-fi
+# shellcheck source=scripts/install_tools.sh
+source "$DOTFILES_ROOT_DIR/scripts/install_tools.sh"
 
 log_info "Führe Shell-Setup aus..."
-if ! bash "$SCRIPT_DIR/scripts/setup_shell.sh"; then
-    log_error "Shell-Setup fehlgeschlagen. Breche ab."
-    exit 1
-fi
+# shellcheck source=scripts/setup_shell.sh
+source "$DOTFILES_ROOT_DIR/scripts/setup_shell.sh"
 
 log_info "Führe Shell-Konfiguration aus..."
-if ! bash "$SCRIPT_DIR/scripts/configure_shell.sh"; then
-    log_error "Shell-Konfiguration fehlgeschlagen. Breche ab."
-    exit 1
-fi
+# shellcheck source=scripts/configure_shell.sh
+source "$DOTFILES_ROOT_DIR/scripts/configure_shell.sh"
 
 log_step "Installation abgeschlossen!"
 if [[ "$DRY_RUN" == true ]]; then
     log_success "🌵 Dry Run beendet. Es wurden keine Änderungen vorgenommen."
 else
-    log_success "✨ Alle ausgewählten Komponenten wurden installiert und konfiguriert."
     echo ""
-    log_info "Wichtige Hinweise:"
-    log_info "  1. Shell neu starten: Damit alle Änderungen wirksam werden, starte bitte dein Terminal neu oder führe 'exec zsh -l' aus."
-    log_info "  2. Powerlevel10k: Falls noch nicht geschehen und gewünscht, führe 'p10k configure' aus, um dein Prompt individuell anzupassen."
-    log_info "  3. .zshrc: Deine Konfiguration wurde in '$ZSHRC_DEST' geschrieben."
+    log_success "✨✨✨ Setup erfolgreich abgeschlossen! ✨✨✨"
+    echo ""
+    echo -e "${COLOR_YELLOW}╭───────────────────────────────────────────────────────────────────╮${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│ ${COLOR_GREEN}Wichtige nächste Schritte:${COLOR_YELLOW}                                           │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                                                                   │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│  ${COLOR_CYAN}1. Shell neu starten:${COLOR_RESET} Führe 'exec zsh -l' aus oder öffne ein         │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                     neues Terminalfenster/-Tab.                     │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                                                                   │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│  ${COLOR_CYAN}2. Powerlevel10k:${COLOR_RESET} Falls noch nicht geschehen oder gewünscht,       │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                     führe 'p10k configure' aus, um dein Prompt      │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                     individuell anzupassen.                         │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                                                                   │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│  ${COLOR_CYAN}3. Deine .zshrc:${COLOR_RESET} Wurde in '$ZSHRC_DEST' konfiguriert. │${COLOR_RESET}"
     if [[ -f "$ZSHRC_BACKUP_FILE" ]]; then
-        log_info "     Ein Backup deiner vorherigen .zshrc (falls vorhanden) liegt unter '$ZSHRC_BACKUP_FILE'."
+    echo -e "${COLOR_YELLOW}│                                                                   │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│  ${COLOR_CYAN}4. .zshrc Backup:${COLOR_RESET} Ein Backup deiner vorherigen .zshrc (falls    │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                     vorhanden) liegt unter:                         │${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}│                     '$ZSHRC_BACKUP_FILE'                     │${COLOR_RESET}"
     fi
+    echo -e "${COLOR_YELLOW}╰───────────────────────────────────────────────────────────────────╯${COLOR_RESET}"
     echo ""
 
-    confirm_shell_restart=false
-    if [[ "$AUTO_CONFIRM" == true ]]; then
-        confirm_shell_restart=true
-        log_info "Automatische Zustimmung zum Shell-Neustart durch --yes Flag."
-    else
-        read -p "Möchtest du die Shell jetzt neu starten (exec zsh -l)? (Y/n): " -r restart_choice
-        local choice_val_restart="${restart_choice:-Y}"
-        if [[ "$choice_val_restart" =~ ^[Yy]$ ]]; then
-            confirm_shell_restart=true
-        fi
-    fi
-
-    if $confirm_shell_restart; then
+    if gum_confirm_wrapper "Möchtest du die Shell jetzt neu starten (exec zsh -l)?" "Y"; then
       log_info "Starte Zsh neu..."
       exec zsh -l
     else

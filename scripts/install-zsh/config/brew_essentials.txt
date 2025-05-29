@@ -3,3 +3,4 @@ git
 zsh
 zsh-completions
 fzf
+gum

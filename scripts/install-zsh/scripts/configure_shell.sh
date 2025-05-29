@@ -2,12 +2,42 @@
 set -eo pipefail
 set -u
 
-# shellcheck source=../lib/utils.sh
-source "$(dirname "$0")/../lib/utils.sh"
-
 DRY_RUN="${DRY_RUN:-false}"
 PERFORM_UPDATES="${PERFORM_UPDATES:-false}"
-INSTALL_MODE="${INSTALL_MODE:-full}"
+INSTALL_MODE="${INSTALL_MODE:-full}" 
+
+function modify_zshrc_for_omz_core() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "[DRY RUN] Würde .zshrc für OMZ Kernkonfiguration anpassen."
+        return
+    fi
+
+    log_info "Stelle OMZ Kernkonfiguration in $ZSHRC_DEST sicher..."
+
+    local zshrc_content=""
+    if [[ -f "$ZSHRC_DEST" ]]; then
+        zshrc_content=$(cat "$ZSHRC_DEST")
+    else
+        touch "$ZSHRC_DEST"
+    fi
+
+    local export_zsh_line="export ZSH=\"$OMZ_DIR\""
+    local source_omz_line_escaped_dollar='source "$ZSH/oh-my-zsh.sh"' 
+    local source_omz_line_no_quotes_escaped_dollar='source $ZSH/oh-my-zsh.sh'
+
+
+    local temp_cleaned_zshrc
+    temp_cleaned_zshrc=$(mktemp)
+    trap 'rm -f "$temp_cleaned_zshrc"' RETURN 
+
+    echo "$zshrc_content" | grep -Fxv -- "$export_zsh_line" | grep -Fxv -- "$source_omz_line_escaped_dollar" | grep -Fxv -- "$source_omz_line_no_quotes_escaped_dollar" > "$temp_cleaned_zshrc"
+    
+    local current_content_after_clean
+    current_content_after_clean=$(cat "$temp_cleaned_zshrc")
+    echo -e "${export_zsh_line}\n${current_content_after_clean}" > "$ZSHRC_DEST"
+    
+    log_info "$ZSHRC_DEST für OMZ-Kernzeilen vorbereitet."
+}
 
 
 function setup_powerlevel10k() {
@@ -34,18 +64,26 @@ function setup_powerlevel10k() {
   fi
 
   if [[ "$DRY_RUN" == false ]]; then
-    if grep -q "^ZSH_THEME=" "$ZSHRC_DEST"; then
-        if ! grep -qF "$p10k_theme_line" "$ZSHRC_DEST"; then
-            log_info "Aktualisiere ZSH_THEME auf powerlevel10k/powerlevel10k..."
-            if [[ "$(uname)" == "Darwin" ]]; then
-                sed -i "" "s|^ZSH_THEME=.*|$p10k_theme_line|" "$ZSHRC_DEST"
-            else
-                sed -i "s|^ZSH_THEME=.*|$p10k_theme_line|" "$ZSHRC_DEST"
-            fi
-        fi
-    else
-        append_if_missing "$ZSHRC_DEST" "$p10k_theme_line"
-    fi
+      local temp_zshrc_theme
+      temp_zshrc_theme=$(mktemp)
+      trap 'rm -f "$temp_zshrc_theme"' RETURN
+
+      if grep -q "^ZSH_THEME=" "$ZSHRC_DEST"; then
+          awk -v theme_line="$p10k_theme_line" '{if ($0 ~ /^ZSH_THEME=/) print theme_line; else print $0}' "$ZSHRC_DEST" > "$temp_zshrc_theme"
+          log_info "ZSH_THEME in $ZSHRC_DEST auf powerlevel10k/powerlevel10k aktualisiert."
+      else
+          log_warn "ZSH_THEME Zeile nicht in .zshrc gefunden. Füge sie hinzu."
+          local export_zsh_pattern="^export ZSH="
+          if grep -q "$export_zsh_pattern" "$ZSHRC_DEST"; then 
+              awk -v theme_line="$p10k_theme_line" -v pattern="$export_zsh_pattern" '
+              {print $0} $0 ~ pattern {print theme_line}
+              ' "$ZSHRC_DEST" > "$temp_zshrc_theme"
+          else 
+              (echo "$p10k_theme_line"; cat "$ZSHRC_DEST") > "$temp_zshrc_theme"
+          fi
+          log_info "$p10k_theme_line zu $ZSHRC_DEST hinzugefügt."
+      fi
+      cp "$temp_zshrc_theme" "$ZSHRC_DEST"
   else
     log_info "[DRY RUN] Würde ZSH_THEME in $ZSHRC_DEST auf powerlevel10k/powerlevel10k prüfen/setzen."
   fi
@@ -63,43 +101,65 @@ function configure_omz_plugins() {
     selected_plugins_for_omz+=("fzf-tab")
   fi
 
-  if [[ "$INSTALL_MODE" == "full" ]]; then
-    log_info "Interaktive Auswahl für zusätzliche Oh My Zsh Plugins (Modus: full)..."
+  if [[ "$INSTALL_MODE" == "full" || "$INSTALL_MODE" == "full_interactive" ]]; then
+    log_info "Interaktive Auswahl für zusätzliche Oh My Zsh Plugins..."
     local omz_plugins_file
-    omz_plugins_file="$(dirname "$0")/../config/omz_plugins.txt"
-    if [[ -f "$omz_plugins_file" ]] && command_exists "fzf"; then
-      local available_plugins=()
-      local line_content 
-      while IFS= read -r line_content || [[ -n "$line_content" ]]; do
-        local plugin_name_from_file
-        plugin_name_from_file=$(echo "$line_content" | awk '{print $1}')
-        [[ "$plugin_name_from_file" =~ ^#.*$ || -z "$plugin_name_from_file" ]] && continue
-        local is_base=false
-        for p_base_iter in "${base_plugins[@]}"; do [[ "$p_base_iter" == "$plugin_name_from_file" ]] && is_base=true && break; done
-        [[ "$plugin_name_from_file" == "fzf-tab" ]] && is_base=true
-        ! $is_base && available_plugins+=("$plugin_name_from_file")
+    omz_plugins_file="${DOTFILES_ROOT_DIR}/config/omz_plugins.txt"
+    if [[ -f "$omz_plugins_file" ]]; then
+      local available_plugins_for_choice=()
+      local line_content_plugin
+      while IFS= read -r line_content_plugin || [[ -n "$line_content_plugin" ]]; do
+        local plugin_name_from_file_choice
+        plugin_name_from_file_choice=$(echo "$line_content_plugin" | awk '{print $1}')
+        [[ "$plugin_name_from_file_choice" =~ ^#.*$ || -z "$plugin_name_from_file_choice" ]] && continue
+        local is_base_or_fzf_tab=false
+        for p_base_iter_choice in "${base_plugins[@]}"; do [[ "$p_base_iter_choice" == "$plugin_name_from_file_choice" ]] && is_base_or_fzf_tab=true && break; done
+        [[ "$plugin_name_from_file_choice" == "fzf-tab" ]] && is_base_or_fzf_tab=true
+        ! $is_base_or_fzf_tab && available_plugins_for_choice+=("$plugin_name_from_file_choice")
       done < "$omz_plugins_file"
       
-      if [[ ${#available_plugins[@]} -gt 0 ]]; then
-        local user_selected_plugins_str
-        user_selected_plugins_str=$(printf "%s\n" "${available_plugins[@]}" | \
-          fzf --multi --ansi --height=40% --border \
-              --prompt="Wähle zusätzliche OMZ Plugins (TAB zum Markieren, ENTER): " \
-              --preview="echo {}" --preview-window=up:3:wrap)
-        
-        if [[ -n "$user_selected_plugins_str" ]]; then
-            local user_selected_plugins_arr=()
-            readarray -t user_selected_plugins_arr < <(echo "$user_selected_plugins_str")
-            selected_plugins_for_omz+=("${user_selected_plugins_arr[@]}")
-            log_success "Ausgewählte zusätzliche Plugins: ${user_selected_plugins_arr[*]}"
+      if [[ ${#available_plugins_for_choice[@]} -gt 0 ]]; then
+        local user_selected_plugins_arr_omz=()
+        if ! command_exists "gum"; then
+            if ! try_install_gum; then
+                 log_warn "Installation von 'gum' fehlgeschlagen oder abgelehnt."
+            fi
+        fi
+
+        if command_exists "gum"; then
+            log_info "Verwende 'gum' für die interaktive Plugin-Auswahl..."
+            local gum_selected_plugins_str
+            gum_selected_plugins_str=$(gum choose --no-limit --header "Wähle zusätzliche OMZ Plugins (SPACE zum Markieren, ENTER):" "${available_plugins_for_choice[@]}")
+            if [[ -n "$gum_selected_plugins_str" ]]; then
+                while IFS= read -r selected_line; do
+                    user_selected_plugins_arr_omz+=("$selected_line")
+                done < <(echo "$gum_selected_plugins_str")
+            fi
+        elif command_exists "fzf"; then
+            log_warn "'gum' nicht verfügbar. Fallback zur Plugin-Auswahl mit 'fzf'."
+            local fzf_selected_plugins_str
+            fzf_selected_plugins_str=$(printf "%s\n" "${available_plugins_for_choice[@]}" | \
+              fzf --multi --ansi --height=40% --border \
+                  --prompt="Wähle zusätzliche OMZ Plugins (TAB zum Markieren, ENTER): " \
+                  --preview="echo {}" --preview-window=up:3:wrap)
+            if [[ -n "$fzf_selected_plugins_str" ]]; then
+                while IFS= read -r selected_line; do
+                    user_selected_plugins_arr_omz+=("$selected_line")
+                done < <(echo "$fzf_selected_plugins_str")
+            fi
+        else
+            log_warn "'gum' und 'fzf' nicht gefunden. Überspringe interaktive Plugin-Auswahl."
+        fi
+
+        if [[ ${#user_selected_plugins_arr_omz[@]} -gt 0 ]]; then
+            selected_plugins_for_omz+=("${user_selected_plugins_arr_omz[@]}")
+            log_success "Ausgewählte zusätzliche Plugins: ${user_selected_plugins_arr_omz[*]}"
         else
             log_warn "Keine zusätzlichen Plugins ausgewählt."
         fi
       else
         log_info "Keine weiteren Plugins in $omz_plugins_file zur Auswahl verfügbar."
       fi
-    elif ! command_exists "fzf"; then
-        log_warn "fzf nicht gefunden. Überspringe interaktive Plugin-Auswahl."
     else
         log_warn "Plugin-Definitionsdatei $omz_plugins_file nicht gefunden."
     fi
@@ -109,14 +169,75 @@ function configure_omz_plugins() {
   
   # shellcheck disable=SC2207
   local unique_plugins_list=($(echo "${selected_plugins_for_omz[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-  local plugin_line_content="plugins=(${unique_plugins_list[*]})"
   
-  manage_config_block "$ZSHRC_DOTFILES_OMZ_PLUGINS_START_MARKER" "$ZSHRC_DOTFILES_OMZ_PLUGINS_END_MARKER" "$plugin_line_content" "$ZSHRC_DEST"
+  log_info "Überprüfe und installiere ausgewählte Oh My Zsh Community Plugins..."
+  local community_plugin_names=("zsh-autosuggestions" "zsh-syntax-highlighting")
+  local community_plugin_repos=(
+      "https://github.com/zsh-users/zsh-autosuggestions"
+      "https://github.com/zsh-users/zsh-syntax-highlighting"
+  )
+
+  for plugin_to_activate_check in "${unique_plugins_list[@]}"; do
+      for i in "${!community_plugin_names[@]}"; do 
+          local known_community_plugin_name="${community_plugin_names[$i]}"
+          
+          if [[ "$plugin_to_activate_check" == "$known_community_plugin_name" ]]; then
+              local plugin_repo_url="${community_plugin_repos[$i]}"
+              local plugin_install_dir="$OMZ_CUSTOM_DIR/plugins/$known_community_plugin_name"
+
+              if [[ ! -d "$plugin_install_dir" ]]; then
+                  log_info "Ausgewähltes Community-Plugin '$known_community_plugin_name' nicht gefunden. Klone von $plugin_repo_url..."
+                  if ! execute_or_dryrun "Plugin $known_community_plugin_name klonen" git clone --depth=1 "$plugin_repo_url" "$plugin_install_dir"; then
+                      [[ "$DRY_RUN" == false ]] && log_warn "Konnte Plugin '$known_community_plugin_name' nicht klonen. Es wird möglicherweise nicht funktionieren."
+                  else
+                      [[ "$DRY_RUN" == false ]] && log_success "✅ Plugin '$known_community_plugin_name' erfolgreich geklont."
+                  fi
+              else
+                  log_info "Ausgewähltes Community-Plugin '$known_community_plugin_name' bereits vorhanden in $plugin_install_dir."
+                  if [[ "$PERFORM_UPDATES" == true && -d "$plugin_install_dir/.git" ]]; then
+                      log_info "Aktualisiere Plugin '$known_community_plugin_name'..."
+                      if execute_or_dryrun "Plugin $known_community_plugin_name Update" git -C "$plugin_install_dir" pull; then :
+                      else [[ "$DRY_RUN" == false ]] && log_warn "Update für Plugin '$known_community_plugin_name' fehlgeschlagen."; fi
+                  fi
+              fi
+              break 
+          fi
+      done
+  done
+
+  local plugin_line_content_str 
+  plugin_line_content_str=$(IFS=" "; echo "${unique_plugins_list[*]}")
+  local plugin_line_content="plugins=($plugin_line_content_str)" 
+  plugin_line_content="${plugin_line_content% }" 
+  
+  if [[ "$DRY_RUN" == false ]]; then
+      local temp_zshrc_plugins_update
+      temp_zshrc_plugins_update=$(mktemp)
+      trap 'rm -f "$temp_zshrc_plugins_update"' RETURN
+
+      if grep -q "^plugins=(" "$ZSHRC_DEST"; then
+          log_info "Aktualisiere Plugin-Liste in $ZSHRC_DEST..."
+          awk -v plugin_line="$plugin_line_content" '{if ($0 ~ /^plugins=\(.*\)/) print plugin_line; else print $0}' "$ZSHRC_DEST" > "$temp_zshrc_plugins_update"
+      else
+          log_warn "Zeile 'plugins=(...)' nicht in $ZSHRC_DEST gefunden. Füge sie hinzu."
+          local source_omz_sh_line_pattern_grep='source "$ZSH/oh-my-zsh.sh"' 
+          if grep -q "$source_omz_sh_line_pattern_grep" "$ZSHRC_DEST"; then 
+              awk -v plugin_line="$plugin_line_content" -v pattern_re='source "\$ZSH/oh-my-zsh\.sh"' '
+              $0 ~ pattern_re { print plugin_line; print $0; next }
+              { print }
+              ' "$ZSHRC_DEST" > "$temp_zshrc_plugins_update"
+          else 
+              (cat "$ZSHRC_DEST"; echo "$plugin_line_content") > "$temp_zshrc_plugins_update"
+          fi
+      fi
+      cp "$temp_zshrc_plugins_update" "$ZSHRC_DEST"
+  else
+      log_info "[DRY RUN] Würde Plugin-Liste in $ZSHRC_DEST prüfen/setzen auf: $plugin_line_content"
+  fi
 }
 
 function setup_fzf() {
   log_step "FZF einrichten"
-  
   log_info "FZF Basis-Setup (Keybindings, Completion)..."
   local fzf_source_line="[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh"
   append_if_missing "$ZSHRC_DEST" "$fzf_source_line"
@@ -153,7 +274,7 @@ function setup_fzf() {
     fi
   fi
 
-  if [[ "$INSTALL_MODE" == "full" ]]; then
+  if [[ "$INSTALL_MODE" == "full" || "$INSTALL_MODE" == "full_interactive" ]]; then
     log_info "Erweiterte FZF-Konfiguration (Preview, Default Opts)..."
     local fzf_preview_script_path="$HOME/.config/fzf/fzf-preview.sh"
     
@@ -181,20 +302,23 @@ EOF_FZF_PREVIEW
         log_info "[DRY RUN] Würde FZF Preview Skript nach $fzf_preview_script_path schreiben."
     fi
 
-    local fzf_opts_content
-    read -r -d '' fzf_opts_content <<EOF
-# FZF Default Command und Options (added by dotfiles installer)
-export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
-export FZF_CTRL_T_COMMAND=\$FZF_DEFAULT_COMMAND
-export FZF_DEFAULT_OPTS="\\
---height 50% --layout=reverse --border=rounded \\
---color=bg+:#313244,bg:#1e1e2e,spinner:#f5e0dc,hl:#f38ba8 \\
---color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc \\
---color=marker:#f5e0dc,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8 \\
---preview='${fzf_preview_script_path} {}' \\
---preview-window=right:60%:wrap"
-EOF
-    manage_config_block "$ZSHRC_DOTFILES_FZF_ADVANCED_CONFIG_START_MARKER" "$ZSHRC_DOTFILES_FZF_ADVANCED_CONFIG_END_MARKER" "$fzf_opts_content" "$ZSHRC_DEST"
+    local fzf_opts_content_raw
+    fzf_opts_content_raw=$(cat <<-EOF_FZF_OPTS
+	# FZF Default Command und Options (added by dotfiles installer)
+	export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
+	export FZF_CTRL_T_COMMAND=\$FZF_DEFAULT_COMMAND
+	export FZF_DEFAULT_OPTS="\\
+	--height 50% --layout=reverse --border=rounded \\
+	--color=bg+:#313244,bg:#1e1e2e,spinner:#f5e0dc,hl:#f38ba8 \\
+	--color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc \\
+	--color=marker:#f5e0dc,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8 \\
+	--preview='${fzf_preview_script_path} {}' \\
+	--preview-window=right:60%:wrap"
+	EOF_FZF_OPTS
+)
+    local fzf_opts_content_for_awk
+    fzf_opts_content_for_awk=$(echo "$fzf_opts_content_raw" | sed 's/\\$//')
+    manage_config_block "$ZSHRC_DOTFILES_FZF_ADVANCED_CONFIG_START_MARKER" "$ZSHRC_DOTFILES_FZF_ADVANCED_CONFIG_END_MARKER" "$fzf_opts_content_for_awk" "$ZSHRC_DEST"
   fi
 }
 
@@ -209,21 +333,14 @@ function configure_aliases_and_greetings() {
   log_step "Aliase und Neofetch-Begrüßung konfigurieren"
   
   local aliases_content=""
-  local optional_tools_file
-  optional_tools_file="$(dirname "$0")/../config/brew_optionals.txt"
-  if [[ -f "$optional_tools_file" ]]; then
-    local tool_name_raw_alias
-    while IFS= read -r tool_name_raw_alias || [[ -n "$tool_name_raw_alias" ]]; do
-      local tool_name_alias
-      tool_name_alias=$(echo "$tool_name_raw_alias" | xargs)
-      [[ "$tool_name_alias" =~ ^#.*$ || -z "$tool_name_alias" ]] && continue
-      
-      local tool_exists=false
-      if command_exists "$tool_name_alias" || (command_exists brew && brew list "$tool_name_alias" &>/dev/null); then
-        tool_exists=true
-      fi
-      if ! $tool_exists; then continue; fi
-
+  local tools_for_aliases_str="${SELECTED_OPTIONAL_TOOLS_LIST:-}" 
+  local tools_for_aliases_arr=()
+  if [[ -n "$tools_for_aliases_str" ]]; then
+      # shellcheck disable=SC2206 
+      tools_for_aliases_arr=($tools_for_aliases_str) 
+  fi
+  
+  for tool_name_alias in "${tools_for_aliases_arr[@]}"; do
       case "$tool_name_alias" in
         bat) aliases_content+="alias cat='bat --theme=Catppuccin-mocha'\n" ;;
         lsd)
@@ -241,8 +358,7 @@ function configure_aliases_and_greetings() {
           aliases_content+="alias traceroute='grc traceroute'\n"
           ;;
       esac
-    done < "$optional_tools_file"
-  fi
+  done
 
   if [[ -n "$aliases_content" ]]; then
     aliases_content=$(echo -e "${aliases_content%'\n'}")
@@ -253,20 +369,24 @@ function configure_aliases_and_greetings() {
   fi
 
   local neofetch_is_selected_and_installed=false
-  if grep -q "neofetch" "$optional_tools_file" && (command_exists "neofetch" || (command_exists brew && brew list "neofetch" &>/dev/null)); then
-    neofetch_is_selected_and_installed=true
-  fi
+  for tool_in_list in "${tools_for_aliases_arr[@]}"; do
+      if [[ "$tool_in_list" == "neofetch" ]]; then
+          neofetch_is_selected_and_installed=true
+          break
+      fi
+  done
 
   if $neofetch_is_selected_and_installed; then
     local neofetch_config_content
-    read -r -d '' neofetch_config_content <<EOF
+    neofetch_config_content=$(cat <<-EOF_NEOFETCH
 # Display Neofetch on interactive shell startup (added by dotfiles installer)
 if [[ \$- == *i* ]] && command -v neofetch &>/dev/null; then
   neofetch --ascii_distro Tux --color_blocks off \\
     --colors 4 6 1 3 5 7 \\
     --disable term termfont theme icons cursor shell de wm resolution cpu gpu memory
 fi
-EOF
+EOF_NEOFETCH
+)
     manage_config_block "$ZSHRC_DOTFILES_NEOFETCH_START_MARKER" "$ZSHRC_DOTFILES_NEOFETCH_END_MARKER" "$neofetch_config_content" "$ZSHRC_DEST"
   else
     manage_config_block "$ZSHRC_DOTFILES_NEOFETCH_START_MARKER" "$ZSHRC_DOTFILES_NEOFETCH_END_MARKER" "__REMOVE_BLOCK__" "$ZSHRC_DEST"
@@ -281,15 +401,25 @@ if ! command_exists "fzf"; then
     log_error "fzf ist nicht installiert. Bitte zuerst 'scripts/install_tools.sh' ausführen."
     exit 1
 fi
+if ! command_exists "gum" && [[ "$INSTALL_MODE" != "minimal" ]]; then 
+    log_warn "'gum' ist nicht installiert. Einige interaktive Auswahlen könnten auf Fallbacks zurückgreifen oder nicht verfügbar sein."
+fi
 
 if [[ "$DRY_RUN" == false && ! -f "$ZSHRC_DEST" ]]; then
     log_info "$ZSHRC_DEST nicht gefunden, erstelle leere Datei."
     touch "$ZSHRC_DEST"
 fi
 
+modify_zshrc_for_omz_core
+
 setup_powerlevel10k
-setup_fzf
-configure_omz_plugins
+configure_omz_plugins 
+
+if [[ "$DRY_RUN" == false ]]; then
+    append_if_missing "$ZSHRC_DEST" "source \"\$ZSH/oh-my-zsh.sh\""
+fi
+
+setup_fzf 
 configure_aliases_and_greetings
 
 log_success "Shell-Konfiguration abgeschlossen."

@@ -2,12 +2,8 @@
 set -eo pipefail
 set -u
 
-# shellcheck source=../lib/utils.sh
-source "$(dirname "$0")/../lib/utils.sh"
-
 DRY_RUN="${DRY_RUN:-false}"
 PERFORM_UPDATES="${PERFORM_UPDATES:-false}"
-# AUTO_CONFIRM wird hier nicht direkt verwendet, da keine Ja/Nein-Abfragen
 
 function set_zsh_as_default_shell() {
   log_step "Zsh als Standardshell einrichten"
@@ -51,10 +47,26 @@ function setup_oh_my_zsh() {
     if [[ "$PERFORM_UPDATES" == true ]]; then
         log_info "Aktualisiere Oh My Zsh (wegen --update)..."
         # shellcheck disable=SC2034
-        if execute_or_dryrun "Oh My Zsh Update" ZSH=$OMZ_DIR sh -c '$ZSH/tools/upgrade.sh'; then
-            [[ "$DRY_RUN" == false ]] && log_success "✅ Oh My Zsh aktualisiert."
+        if execute_or_dryrun "Oh My Zsh Update" ZSH="$OMZ_DIR" sh -c '"$ZSH"/tools/upgrade.sh'; then
+            : 
         else
-            [[ "$DRY_RUN" == false ]] && log_warn "Oh My Zsh Update fehlgeschlagen oder keine Änderungen."
+            [[ "$DRY_RUN" == false ]] && log_warn "Oh My Zsh Update nicht vollständig erfolgreich oder keine Änderungen."
+        fi
+    fi
+    if [[ "$DRY_RUN" == false ]]; then
+        if ! grep -q "export ZSH=" "$ZSHRC_DEST" || ! grep -q "ZSH/oh-my-zsh.sh" "$ZSHRC_DEST"; then
+            log_info "OMZ ist installiert, aber Kernzeilen fehlen in .zshrc. Versuche, sie hinzuzufügen."
+            local temp_zshrc_omz_core
+            temp_zshrc_omz_core=$(mktemp)
+            echo "export ZSH=\"$OMZ_DIR\"" >> "$temp_zshrc_omz_core"
+            echo "source \"\$ZSH/oh-my-zsh.sh\"" >> "$temp_zshrc_omz_core"
+            
+            if [[ -f "$ZSHRC_DEST" ]]; then
+                cat "$ZSHRC_DEST" >> "$temp_zshrc_omz_core"
+            fi
+            cp "$temp_zshrc_omz_core" "$ZSHRC_DEST"
+            rm -f "$temp_zshrc_omz_core"
+            log_success "OMZ Kernzeilen zu $ZSHRC_DEST hinzugefügt/aktualisiert."
         fi
     fi
     return
@@ -65,11 +77,42 @@ function setup_oh_my_zsh() {
     log_info "[DRY RUN] Würde Oh My Zsh Installationsskript ausführen."
     return
   fi
+
+  local omz_install_log_file
+  omz_install_log_file=$(mktemp)
+  if [[ -z "$omz_install_log_file" || ! -f "$omz_install_log_file" ]]; then
+      log_error "Konnte temporäre Logdatei für OMZ-Installation nicht erstellen."
+      exit 1
+  fi
+  trap 'rm -f "$omz_install_log_file"' RETURN
+
+  local omz_exit_code
+  local omz_install_command_string
   
-  if RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended; then
-    log_success "✅ Oh My Zsh installiert."
+  log_info "Lasse Oh My Zsh die .zshrc verwalten/erstellen."
+  omz_install_command_string='export RUNZSH="no" CHSH="no"; sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
+  
+  (
+    eval "$omz_install_command_string" > "$omz_install_log_file" 2>&1
+  )
+  omz_exit_code=$?
+
+  if [[ "$omz_exit_code" -eq 0 ]]; then
+    log_success "✅ Oh My Zsh Installationsprozess abgeschlossen (Exit Code: $omz_exit_code)."
+    if [[ ! -d "$OMZ_DIR" ]]; then
+        log_error "OMZ-Verzeichnis $OMZ_DIR nach der Installation nicht gefunden!"
+        log_info "OMZ Installations-Log ($omz_install_log_file):"; cat "$omz_install_log_file"
+        exit 1
+    fi
+    if [[ "$DRY_RUN" == false ]] && (! grep -q "export ZSH=" "$ZSHRC_DEST" || ! grep -q "ZSH/oh-my-zsh.sh" "$ZSHRC_DEST"); then
+        log_error "OMZ hat die .zshrc nicht korrekt initialisiert. Kernzeilen fehlen."
+        log_info "OMZ Installations-Log ($omz_install_log_file):"; cat "$omz_install_log_file"
+        log_info "Inhalt der .zshrc:"; cat "$ZSHRC_DEST"
+        exit 1
+    fi
   else
-    log_error "Fehler bei der Installation von Oh My Zsh."
+    log_error "Fehler bei der Installation von Oh My Zsh (Exit Code: $omz_exit_code)."
+    log_info "OMZ Installations-Log ($omz_install_log_file):"; cat "$omz_install_log_file"
     exit 1
   fi
 }
