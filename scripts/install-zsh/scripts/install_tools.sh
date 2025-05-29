@@ -4,8 +4,8 @@ set -u
 
 DRY_RUN="${DRY_RUN:-false}"
 PERFORM_UPDATES="${PERFORM_UPDATES:-false}"
-INSTALL_MODE="${INSTALL_MODE:-full}" 
-AUTO_CONFIRM="${AUTO_CONFIRM:-false}" 
+INSTALL_MODE="${INSTALL_MODE:-full}"
+AUTO_CONFIRM="${AUTO_CONFIRM:-false}"
 
 MANIFEST_FILE="$HOME/.config/dotfiles_installer/installed_tools_manifest.txt"
 
@@ -13,7 +13,7 @@ function update_package_manager_packages() {
     log_step "Aktualisiere Paketquellen und Pakete für $PM_NAME"
 
     if [[ "$DRY_RUN" == false ]] && ( [[ "$PERFORM_UPDATES" == true ]] || [[ "$INSTALL_MODE" == "full" ]] ); then
-        if ! "$pkg_update_index"; then 
+        if ! "$pkg_update_index"; then
              log_warn "Aktualisierung des Paket-Index ($PM_NAME) fehlgeschlagen."
         fi
     fi
@@ -48,31 +48,15 @@ function install_tools_from_file() {
         local tool_name_choice
         tool_name_choice=$(echo "$tool_name_raw_choice" | xargs)
         [[ "$tool_name_choice" =~ ^#.*$ || -z "$tool_name_choice" ]] && continue
-        
-        local is_already_installed_check=false
-        if "$pkg_is_installed" "$tool_name_choice"; then
-            is_already_installed_check=true
-        else
-             local is_cask_check_tmp=false
-             if [[ "$PM_NAME" == "Homebrew" ]]; then
-                 case "$tool_name_choice" in
-                     iterm2|font-hack-nerd-font) is_cask_check_tmp=true ;;
-                 esac
-             fi
-             if $is_cask_check_tmp; then
-                if "$pkg_cask_is_installed" "$tool_name_choice"; then
-                    is_already_installed_check=true
-                fi
-             fi
-        fi
-        if ! $is_already_installed_check; then
+
+        if ! "$pkg_is_installed" "$tool_name_choice"; then
             available_opts_for_choice+=("$tool_name_choice")
         fi
     done < "$tool_file"
 
     if [[ ${#available_opts_for_choice[@]} -gt 0 ]]; then
         if ! command_exists "gum"; then
-            if ! try_install_gum; then 
+            if ! try_install_gum; then
                  log_warn "Installation von 'gum' fehlgeschlagen oder abgelehnt."
             fi
         fi
@@ -111,7 +95,7 @@ function install_tools_from_file() {
     else
         log_info "Keine (neuen) optionalen Tools in $tool_file zur Auswahl verfügbar oder alle bereits installiert."
     fi
-  else 
+  else
     log_step "Installiere $tool_type Tools aus $tool_file via $PM_NAME"
     if [[ ! -f "$tool_file" ]]; then log_warn "Tool-Datei $tool_file nicht gefunden."; return; fi
     local tool_name_raw_file
@@ -130,23 +114,11 @@ function install_tools_from_file() {
   fi
 
   for tool_name_install in "${tools_to_install_list[@]}"; do
-    local is_cask=false
-    if [[ "$PM_NAME" == "Homebrew" ]]; then
-        case "$tool_name_install" in
-            iterm2|font-hack-nerd-font) is_cask=true ;;
-        esac
-    fi
-
     local install_status_output
     local exit_code
-    if $is_cask; then
-        install_status_output=$("$pkg_cask_install" "$tool_name_install")
-        exit_code=$?
-    else
-        install_status_output=$("$pkg_install" "$tool_name_install")
-        exit_code=$?
-    fi
-    
+    install_status_output=$("$pkg_install" "$tool_name_install")
+    exit_code=$?
+
     if [[ "$exit_code" -eq 0 ]]; then
         if [[ "$DRY_RUN" == false && "$install_status_output" == "newly_installed" ]]; then
             if ! grep -Fxq "$tool_name_install" "$MANIFEST_FILE" 2>/dev/null; then
@@ -164,7 +136,7 @@ update_package_manager_packages
 ESSENTIALS_TOOLS_FILE="${DOTFILES_ROOT_DIR}/config/brew_essentials.txt"
 install_tools_from_file "$ESSENTIALS_TOOLS_FILE" "essentielle"
 
-export SELECTED_OPTIONAL_TOOLS_LIST="" 
+export SELECTED_OPTIONAL_TOOLS_LIST=""
 
 if [[ "$INSTALL_MODE" == "full_interactive" ]]; then
     OPTIONAL_TOOLS_FILE="${DOTFILES_ROOT_DIR}/config/brew_optionals.txt"
@@ -174,12 +146,12 @@ elif [[ "$INSTALL_MODE" == "full" ]]; then
     log_info "Installiere alle optionalen Tools (Modus: full)..."
     install_tools_from_file "$OPTIONAL_TOOLS_FILE" "optionale"
 fi
-    
+
 temp_selected_opts_final=()
 all_configured_tools_files=("${DOTFILES_ROOT_DIR}/config/brew_essentials.txt" "${DOTFILES_ROOT_DIR}/config/brew_optionals.txt")
 for tool_list_file in "${all_configured_tools_files[@]}"; do
     if [[ -f "$tool_list_file" ]]; then
-        tool_name_raw_final="" 
+        tool_name_raw_final=""
         while IFS= read -r tool_name_raw_final || [[ -n "$tool_name_raw_final" ]]; do
             tool_name_final=$(echo "$tool_name_raw_final" | xargs)
             [[ "$tool_name_final" =~ ^#.*$ || -z "$tool_name_final" ]] && continue

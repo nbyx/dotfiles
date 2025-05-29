@@ -2,11 +2,20 @@
 set -eo pipefail
 set -u
 
+function _pm_brew_is_package_a_cask() {
+    local package_name_to_check="$1"
+    if brew info --cask "$package_name_to_check" &>/dev/null; then
+        return 0 
+    else
+        return 1 
+    fi
+}
+
 function pm_brew_install_self_if_needed() {
     if ! command_exists "brew"; then
         log_info "🍺 Homebrew nicht gefunden. Installiere Homebrew..."
         if ! execute_or_dryrun "Homebrew Installation" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" -- --non-interactive; then
-            return 1 
+            return 1
         fi
     fi
     return 0
@@ -56,22 +65,31 @@ function pm_brew_init() {
 
 function pm_brew_is_installed() {
     local package_name="$1"
-    brew list "$package_name" &>/dev/null
+    if _pm_brew_is_package_a_cask "$package_name"; then
+        brew list --cask "$package_name" &>/dev/null
+    else
+        brew list "$package_name" &>/dev/null
+    fi
 }
 
 function pm_brew_install() {
     local package_name="$1"
-    local dry_run_flag="${DRY_RUN:-false}" 
-    
+    local dry_run_flag="${DRY_RUN:-false}"
+    local install_cmd_args=("install")
+
     if pm_brew_is_installed "$package_name"; then
         log_success "$package_name ist bereits installiert."
         echo "already_installed"
         return 0
     fi
-    
-    if execute_or_dryrun "$package_name Homebrew Installation" brew install "$package_name"; then
+
+    if _pm_brew_is_package_a_cask "$package_name"; then
+        install_cmd_args+=("--cask")
+    fi
+    install_cmd_args+=("$package_name")
+
+    if execute_or_dryrun "$package_name Homebrew Installation" brew "${install_cmd_args[@]}"; then
         if [[ "$dry_run_flag" == false ]]; then
-            
             echo "newly_installed"
         else
             echo "dry_run_would_install"
@@ -86,16 +104,24 @@ function pm_brew_install() {
 function pm_brew_uninstall() {
     local package_name="$1"
     local force_flag="${2:-false}"
-    local uninstall_args=("uninstall")
-    [[ "$force_flag" == true ]] && uninstall_args+=("--force")
-    uninstall_args+=("$package_name")
+    local uninstall_cmd_args=("uninstall")
 
-    if ! pm_brew_is_installed "$package_name"; then
+    local is_installed_as_cask=false
+    if brew list --cask "$package_name" &>/dev/null; then
+        is_installed_as_cask=true
+    elif ! brew list "$package_name" &>/dev/null; then
         log_info "$package_name ist nicht via Homebrew installiert."
-        return 0 
+        return 0
     fi
 
-    if execute_or_dryrun "$package_name Homebrew Deinstallation" brew "${uninstall_args[@]}"; then
+    if $is_installed_as_cask; then
+        uninstall_cmd_args+=("--cask")
+    fi
+
+    [[ "$force_flag" == true ]] && uninstall_cmd_args+=("--force")
+    uninstall_cmd_args+=("$package_name")
+
+    if execute_or_dryrun "$package_name Homebrew Deinstallation" brew "${uninstall_cmd_args[@]}"; then
         return 0
     else
         return 1
@@ -126,51 +152,6 @@ function pm_brew_autoremove() {
     fi
 }
 
-function pm_brew_cask_is_installed() {
-    local cask_name="$1"
-    brew list --cask "$cask_name" &>/dev/null
-}
-
-function pm_brew_cask_install() {
-    local cask_name="$1"
-    local dry_run_flag="${DRY_RUN:-false}"
-
-    if pm_brew_cask_is_installed "$cask_name"; then
-        log_success "Cask $cask_name ist bereits installiert."
-        echo "already_installed"
-        return 0
-    fi
-    if execute_or_dryrun "$cask_name Homebrew Cask Installation" brew install --cask "$cask_name"; then
-        if [[ "$dry_run_flag" == false ]]; then
-            echo "newly_installed"
-        else
-            echo "dry_run_would_install"
-        fi
-        return 0
-    else
-        echo "install_failed"
-        return 1
-    fi
-}
-
-function pm_brew_cask_uninstall() {
-    local cask_name="$1"
-    local force_flag="${2:-false}"
-    local uninstall_args=("uninstall" "--cask")
-    [[ "$force_flag" == true ]] && uninstall_args+=("--force")
-    uninstall_args+=("$cask_name")
-
-    if ! pm_brew_cask_is_installed "$cask_name"; then
-        log_info "Cask $cask_name ist nicht via Homebrew installiert."
-        return 0
-    fi
-    if execute_or_dryrun "$cask_name Homebrew Cask Deinstallation" brew "${uninstall_args[@]}"; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 export pkg_init="pm_brew_init"
 export pkg_is_installed="pm_brew_is_installed"
 export pkg_install="pm_brew_install"
@@ -178,9 +159,5 @@ export pkg_uninstall="pm_brew_uninstall"
 export pkg_update_index="pm_brew_update_index"
 export pkg_update_all="pm_brew_update_all"
 export pkg_autoremove="pm_brew_autoremove"
-
-export pkg_cask_is_installed="pm_brew_cask_is_installed"
-export pkg_cask_install="pm_brew_cask_install"
-export pkg_cask_uninstall="pm_brew_cask_uninstall"
 
 export PM_NAME="Homebrew"

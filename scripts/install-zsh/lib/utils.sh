@@ -91,7 +91,7 @@ function command_exists() {
 function try_install_gum() {
     if [[ "${DRY_RUN:-false}" == true ]]; then
         log_info "[DRY RUN] Würde Installation von 'gum' prüfen und ggf. anbieten."
-        return 1 
+        return 1
     fi
 
     log_warn "'gum' nicht gefunden. Es wird für eine bessere interaktive Erfahrung empfohlen."
@@ -105,11 +105,11 @@ function try_install_gum() {
             log_error "Fehler: pkg_install Variable ('$pkg_install') zeigt nicht auf eine gültige Funktion. Kann 'gum' nicht installieren."
             return 1
         fi
-        
-        if "$pkg_install" "gum" > /dev/null; then 
-            if command_exists "gum"; then 
+
+        if "$pkg_install" "gum" > /dev/null; then
+            if command_exists "gum"; then
                 log_success "'gum' erfolgreich installiert/gefunden."
-                return 0 
+                return 0
             else
                 log_error "Installation von 'gum' scheint fehlgeschlagen zu sein (Befehl nicht gefunden nach Installation)."
                 return 1
@@ -120,7 +120,7 @@ function try_install_gum() {
         fi
     else
         log_warn "Installation von 'gum' übersprungen."
-        return 1 
+        return 1
     fi
 }
 
@@ -134,7 +134,7 @@ function gum_confirm_wrapper() {
     fi
 
     if ! command_exists "gum"; then
-        if ! try_install_gum; then 
+        if ! try_install_gum; then
             log_warn "Fallback zu 'read -p' für Bestätigung, da 'gum' nicht verfügbar/installiert wurde."
             local user_choice
             read -p "$prompt_message ($read_default): " -r user_choice
@@ -146,7 +146,7 @@ function gum_confirm_wrapper() {
             fi
         fi
     fi
-    
+
     if gum confirm "$prompt_message"; then
         return 0
     else
@@ -189,18 +189,18 @@ function manage_config_block() {
     local target_file="$4"
     local dry_run_flag="${DRY_RUN:-false}"
     local uninstall_flag="${UNINSTALL_MODE:-false}"
-    local temp_output_file="" 
+    local temp_output_file=""
     local temp_content_file=""
 
     _cleanup_temp_files() {
-        set +u 
+        set +u
         if [[ -n "$temp_output_file" && -f "$temp_output_file" ]]; then
             rm -f "$temp_output_file"
         fi
         if [[ -n "$temp_content_file" && -f "$temp_content_file" ]]; then
             rm -f "$temp_content_file"
         fi
-        set -u 
+        set -u
     }
     trap _cleanup_temp_files RETURN EXIT SIGINT SIGTERM
 
@@ -245,7 +245,7 @@ function manage_config_block() {
         echo -e "$block_content"
         return 0
     fi
-    
+
     if [[ ! -f "$target_file" ]] && [[ "$dry_run_flag" == false ]]; then
         mkdir -p "$(dirname "$target_file")"
         touch "$target_file"
@@ -273,7 +273,7 @@ function manage_config_block() {
                 while ((getline line < content_file) > 0) {
                     print line;
                 }
-                close(content_file); 
+                close(content_file);
                 print em;
                 block_written = 1;
             }
@@ -321,7 +321,7 @@ function manage_config_block() {
     return 0
 }
 
-PM_NAME="" 
+PM_NAME=""
 
 pkg_init=""
 pkg_is_installed=""
@@ -330,14 +330,11 @@ pkg_uninstall=""
 pkg_update_index=""
 pkg_update_all=""
 pkg_autoremove=""
-pkg_cask_is_installed=""
-pkg_cask_install=""
-pkg_cask_uninstall=""
 
 
 function detect_and_load_package_manager_driver() {
     log_step "Erkenne und lade Paketmanager-Treiber..."
-    local base_dir_pm 
+    local base_dir_pm
     base_dir_pm="$(dirname "${BASH_SOURCE[0]}")/package_managers"
 
     if command_exists "brew"; then
@@ -362,12 +359,12 @@ function detect_and_load_package_manager_driver() {
         log_error "Paketmanager-Treiber wurde gesourct, aber pkg_init wurde nicht korrekt zugewiesen (ist leer)."
         return 1
     fi
-    if ! type "$pkg_init" &>/dev/null; then 
+    if ! type "$pkg_init" &>/dev/null; then
         log_error "Der in pkg_init ('$pkg_init') zugewiesene Name ist keine gültige Funktion."
         return 1
     fi
 
-    if ! "$pkg_init"; then 
+    if ! "$pkg_init"; then
         log_error "Initialisierung des Paketmanager-Treibers ($PM_NAME) fehlgeschlagen."
         return 1
     fi

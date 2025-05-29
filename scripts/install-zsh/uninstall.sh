@@ -3,7 +3,7 @@ set -eo pipefail
 set -u
 
 export DRY_RUN=false
-export UNINSTALL_MODE=true 
+export UNINSTALL_MODE=true
 export AUTO_CONFIRM=false
 export ONLY_CLEANUP_MODE=false
 export FORCE_REMOVE_ALL_CONFIGURED_TOOLS=false
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SCRIPT_DIR_UNINSTALL="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)" 
+SCRIPT_DIR_UNINSTALL="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # shellcheck source=lib/utils.sh
 source "$SCRIPT_DIR_UNINSTALL/lib/utils.sh"
 
@@ -138,14 +138,14 @@ fi
 
 
 if [[ "$ONLY_CLEANUP_MODE" == true ]]; then
-    log_info "--only-cleanup Modus: Überspringe Deinstallation von Tools, Casks und Autoremove."
+    log_info "--only-cleanup Modus: Überspringe Deinstallation von Tools und Autoremove."
 elif ! $pm_driver_loaded_for_uninstall; then
-    log_warn "Kein Paketmanager-Treiber geladen. Überspringe Deinstallation von Tools, Casks und Autoremove."
+    log_warn "Kein Paketmanager-Treiber geladen. Überspringe Deinstallation von Tools und Autoremove."
 else
     TOOLS_TO_UNINSTALL=()
     if [[ "$FORCE_REMOVE_ALL_CONFIGURED_TOOLS" == true ]]; then
         log_warn "FORCE_REMOVE_ALL_CONFIGURED_TOOLS ist aktiv: Versuche alle Tools aus config/*.txt zu entfernen."
-        if [[ -f "$SCRIPT_DIR_UNINSTALL/config/brew_essentials.txt" ]]; then 
+        if [[ -f "$SCRIPT_DIR_UNINSTALL/config/brew_essentials.txt" ]]; then
             tool_raw_ess=""
             while IFS= read -r tool_raw_ess || [[ -n "$tool_raw_ess" ]]; do
                 local tool_ess
@@ -153,7 +153,7 @@ else
                 TOOLS_TO_UNINSTALL+=("$tool_ess")
             done < "$SCRIPT_DIR_UNINSTALL/config/brew_essentials.txt"
         fi
-        if [[ -f "$SCRIPT_DIR_UNINSTALL/config/brew_optionals.txt" ]]; then 
+        if [[ -f "$SCRIPT_DIR_UNINSTALL/config/brew_optionals.txt" ]]; then
             tool_raw_opt=""
             while IFS= read -r tool_raw_opt || [[ -n "$tool_raw_opt" ]]; do
                 local tool_opt
@@ -177,33 +177,20 @@ else
     if [[ ${#TOOLS_TO_UNINSTALL[@]} -gt 0 ]]; then
         # shellcheck disable=SC2207
         unique_tools_to_uninstall=($(echo "${TOOLS_TO_UNINSTALL[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-        log_info "Folgende Tools/Casks werden zur Deinstallation geprüft: ${unique_tools_to_uninstall[*]}"
+        log_info "Folgende Tools werden zur Deinstallation geprüft: ${unique_tools_to_uninstall[*]}"
 
         for tool_name_iter in "${unique_tools_to_uninstall[@]}"; do
-            is_cask=false
-            if [[ "$PM_NAME" == "Homebrew" ]]; then 
-                case "$tool_name_iter" in
-                    iterm2|font-hack-nerd-font) is_cask=true ;;
-                esac
-            fi
-
-            if $is_cask; then
-                if "$pkg_cask_uninstall" "$tool_name_iter" true; then 
-                    [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter (cask)")
-                fi
-            else
-                if "$pkg_uninstall" "$tool_name_iter" true; then 
-                    [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter")
-                fi
+            if "$pkg_uninstall" "$tool_name_iter" true; then
+                [[ "${DRY_RUN:-false}" == false ]] && REMOVED_TOOLS_LIST+=("$tool_name_iter")
             fi
         done
     else
         log_info "Keine Tools zur Deinstallation markiert."
     fi
-    
+
     if [[ "$FORCE_REMOVE_ALL_CONFIGURED_TOOLS" == true || ${#TOOLS_TO_UNINSTALL[@]} -gt 0 ]]; then
         if gum_confirm_wrapper "Möchtest du '$PM_NAME autoremove' ausführen, um verwaiste Abhängigkeiten zu entfernen?" "N"; then
-            if ! "$pkg_autoremove"; then 
+            if ! "$pkg_autoremove"; then
                 log_warn "Autoremove fehlgeschlagen."
             fi
         fi
@@ -211,12 +198,12 @@ else
 fi
 
 if [[ "${DRY_RUN:-false}" == false && "$ONLY_CLEANUP_MODE" == false && ${#REMOVED_TOOLS_LIST[@]} -gt 0 ]]; then
-    log_info "\n${COLOR_YELLOW}Folgende Tools/Casks wurden erfolgreich entfernt:${COLOR_RESET}"
+    log_info "\n${COLOR_YELLOW}Folgende Tools wurden erfolgreich entfernt:${COLOR_RESET}"
     for removed_tool_iter in "${REMOVED_TOOLS_LIST[@]}"; do
         echo -e "  ${COLOR_GREEN}- $removed_tool_iter${COLOR_RESET}"
     done
 elif [[ "${DRY_RUN:-false}" == false && "$ONLY_CLEANUP_MODE" == false ]]; then
-    log_info "Keine Tools/Casks wurden im Rahmen dieser Deinstallation entfernt (oder es wurden keine deinstalliert)."
+    log_info "Keine Tools wurden im Rahmen dieser Deinstallation entfernt (oder es wurden keine deinstalliert)."
 fi
 
 if [[ "$DRY_RUN" == false && -f "$MANIFEST_FILE" ]]; then
@@ -224,7 +211,7 @@ if [[ "$DRY_RUN" == false && -f "$MANIFEST_FILE" ]]; then
         if execute_or_dryrun "Manifest-Datei entfernen" rm -f "$MANIFEST_FILE"; then
            log_info "Manifest-Datei $MANIFEST_FILE entfernt."
         fi
-    elif [[ -f "$MANIFEST_FILE" ]]; then 
+    elif [[ -f "$MANIFEST_FILE" ]]; then
          : > "$MANIFEST_FILE"
         log_info "Manifest-Datei $MANIFEST_FILE geleert."
     fi
