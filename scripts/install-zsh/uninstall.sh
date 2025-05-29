@@ -148,7 +148,6 @@ else
         if [[ -f "$SCRIPT_DIR_UNINSTALL/config/brew_essentials.txt" ]]; then
             tool_raw_ess=""
             while IFS= read -r tool_raw_ess || [[ -n "$tool_raw_ess" ]]; do
-                local tool_ess
                 tool_ess=$(echo "$tool_raw_ess" | xargs); [[ "$tool_ess" =~ ^#.*$ || -z "$tool_ess" ]] && continue
                 TOOLS_TO_UNINSTALL+=("$tool_ess")
             done < "$SCRIPT_DIR_UNINSTALL/config/brew_essentials.txt"
@@ -156,7 +155,6 @@ else
         if [[ -f "$SCRIPT_DIR_UNINSTALL/config/brew_optionals.txt" ]]; then
             tool_raw_opt=""
             while IFS= read -r tool_raw_opt || [[ -n "$tool_raw_opt" ]]; do
-                local tool_opt
                 tool_opt=$(echo "$tool_raw_opt" | xargs); [[ "$tool_opt" =~ ^#.*$ || -z "$tool_opt" ]] && continue
                 TOOLS_TO_UNINSTALL+=("$tool_opt")
             done < "$SCRIPT_DIR_UNINSTALL/config/brew_optionals.txt"
@@ -165,7 +163,6 @@ else
         log_info "🗑️  Entferne Tools gemäß Manifest-Datei: $MANIFEST_FILE"
         tool_name_manifest=""
         while IFS= read -r tool_name_manifest || [[ -n "$tool_name_manifest" ]]; do
-            local tool_manifest
             tool_manifest=$(echo "$tool_name_manifest" | xargs)
             [[ -z "$tool_manifest" ]] && continue
             TOOLS_TO_UNINSTALL+=("$tool_manifest")
