@@ -27,14 +27,18 @@ function modify_zshrc_for_omz_core() {
 
 
     local temp_cleaned_zshrc
-    temp_cleaned_zshrc=$(mktemp)
-    trap 'rm -f "$temp_cleaned_zshrc"' RETURN 
+    temp_cleaned_zshrc=$(create_temp_file "OMZ core config cleanup")
+
+    [[ $? -ne 0 ]] && return 1
 
     echo "$zshrc_content" | grep -Fxv -- "$export_zsh_line" | grep -Fxv -- "$source_omz_line_escaped_dollar" | grep -Fxv -- "$source_omz_line_no_quotes_escaped_dollar" > "$temp_cleaned_zshrc"
     
     local current_content_after_clean
     current_content_after_clean=$(cat "$temp_cleaned_zshrc")
+    
     echo -e "${export_zsh_line}\n${current_content_after_clean}" > "$ZSHRC_DEST"
+    
+    safe_remove_temp_file "$temp_cleaned_zshrc" "OMZ core config cleanup"
     
     log_info "$ZSHRC_DEST für OMZ-Kernzeilen vorbereitet."
 }
@@ -64,29 +68,32 @@ function setup_powerlevel10k() {
   fi
 
   if [[ "$DRY_RUN" == false ]]; then
-      local temp_zshrc_theme
-      temp_zshrc_theme=$(mktemp)
-      trap 'rm -f "$temp_zshrc_theme"' RETURN
+        local temp_zshrc_theme
+        temp_zshrc_theme=$(create_temp_file "ZSH theme update")
 
-      if grep -q "^ZSH_THEME=" "$ZSHRC_DEST"; then
+        [[ $? -ne 0 ]] && return 1
+
+        if grep -q "^ZSH_THEME=" "$ZSHRC_DEST"; then
           awk -v theme_line="$p10k_theme_line" '{if ($0 ~ /^ZSH_THEME=/) print theme_line; else print $0}' "$ZSHRC_DEST" > "$temp_zshrc_theme"
           log_info "ZSH_THEME in $ZSHRC_DEST auf powerlevel10k/powerlevel10k aktualisiert."
-      else
-          log_warn "ZSH_THEME Zeile nicht in .zshrc gefunden. Füge sie hinzu."
-          local export_zsh_pattern="^export ZSH="
-          if grep -q "$export_zsh_pattern" "$ZSHRC_DEST"; then 
-              awk -v theme_line="$p10k_theme_line" -v pattern="$export_zsh_pattern" '
-              {print $0} $0 ~ pattern {print theme_line}
-              ' "$ZSHRC_DEST" > "$temp_zshrc_theme"
-          else 
-              (echo "$p10k_theme_line"; cat "$ZSHRC_DEST") > "$temp_zshrc_theme"
-          fi
-          log_info "$p10k_theme_line zu $ZSHRC_DEST hinzugefügt."
-      fi
-      cp "$temp_zshrc_theme" "$ZSHRC_DEST"
-  else
-    log_info "[DRY RUN] Würde ZSH_THEME in $ZSHRC_DEST auf powerlevel10k/powerlevel10k prüfen/setzen."
-  fi
+        else
+            log_warn "ZSH_THEME Zeile nicht in .zshrc gefunden. Füge sie hinzu."
+            local export_zsh_pattern="^export ZSH="
+            if grep -q "$export_zsh_pattern" "$ZSHRC_DEST"; then 
+                awk -v theme_line="$p10k_theme_line" -v pattern="$export_zsh_pattern" '
+                {print $0} $0 ~ pattern {print theme_line}
+                ' "$ZSHRC_DEST" > "$temp_zshrc_theme"
+            else 
+                (echo "$p10k_theme_line"; cat "$ZSHRC_DEST") > "$temp_zshrc_theme"
+            fi
+            log_info "$p10k_theme_line zu $ZSHRC_DEST hinzugefügt."
+        fi
+        cp "$temp_zshrc_theme" "$ZSHRC_DEST"
+
+        safe_remove_temp_file "$temp_zshrc_theme" "ZSH theme update"
+    else
+        log_info "[DRY RUN] Würde ZSH_THEME in $ZSHRC_DEST auf powerlevel10k/powerlevel10k prüfen/setzen."
+    fi
   
   append_if_missing "$ZSHRC_DEST" "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh"
 }
@@ -212,8 +219,8 @@ function configure_omz_plugins() {
   
   if [[ "$DRY_RUN" == false ]]; then
       local temp_zshrc_plugins_update
-      temp_zshrc_plugins_update=$(mktemp)
-      trap 'rm -f "$temp_zshrc_plugins_update"' RETURN
+      temp_zshrc_plugins_update=$(create_temp_file "plugin list update")
+      [[ $? -ne 0 ]] && return 1
 
       if grep -q "^plugins=(" "$ZSHRC_DEST"; then
           log_info "Aktualisiere Plugin-Liste in $ZSHRC_DEST..."
@@ -231,6 +238,7 @@ function configure_omz_plugins() {
           fi
       fi
       cp "$temp_zshrc_plugins_update" "$ZSHRC_DEST"
+      safe_remove_temp_file "$temp_zshrc_plugins_update" "plugin list update"
   else
       log_info "[DRY RUN] Würde Plugin-Liste in $ZSHRC_DEST prüfen/setzen auf: $plugin_line_content"
   fi

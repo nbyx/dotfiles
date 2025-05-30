@@ -57,7 +57,7 @@ function setup_oh_my_zsh() {
         if ! grep -q "export ZSH=" "$ZSHRC_DEST" || ! grep -q "ZSH/oh-my-zsh.sh" "$ZSHRC_DEST"; then
             log_info "OMZ ist installiert, aber Kernzeilen fehlen in .zshrc. Versuche, sie hinzuzufügen."
             local temp_zshrc_omz_core
-            temp_zshrc_omz_core=$(mktemp)
+            temp_zshrc_omz_core=$(create_temp_file "OMZ core zshrc")
             echo "export ZSH=\"$OMZ_DIR\"" >> "$temp_zshrc_omz_core"
             echo "source \"\$ZSH/oh-my-zsh.sh\"" >> "$temp_zshrc_omz_core"
             
@@ -65,7 +65,7 @@ function setup_oh_my_zsh() {
                 cat "$ZSHRC_DEST" >> "$temp_zshrc_omz_core"
             fi
             cp "$temp_zshrc_omz_core" "$ZSHRC_DEST"
-            rm -f "$temp_zshrc_omz_core"
+            safe_remove_temp_file "$temp_zshrc_omz_core" "OMZ core zshrc"
             log_success "OMZ Kernzeilen zu $ZSHRC_DEST hinzugefügt/aktualisiert."
         fi
     fi
@@ -79,16 +79,12 @@ function setup_oh_my_zsh() {
   fi
 
   local omz_install_log_file
-  omz_install_log_file=$(mktemp)
-  if [[ -z "$omz_install_log_file" || ! -f "$omz_install_log_file" ]]; then
-      log_error "Konnte temporäre Logdatei für OMZ-Installation nicht erstellen."
-      exit 1
-  fi
-  trap 'rm -f "$omz_install_log_file"' RETURN
+  omz_install_log_file=$(create_temp_file "Oh My Zsh log file")
+
 
   local omz_exit_code
   local omz_install_command_string
-  
+  [[ $? -ne 0 ]] && return 1
   log_info "Lasse Oh My Zsh die .zshrc verwalten/erstellen."
   omz_install_command_string='export RUNZSH="no" CHSH="no"; sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
   
@@ -115,6 +111,7 @@ function setup_oh_my_zsh() {
     log_info "OMZ Installations-Log ($omz_install_log_file):"; cat "$omz_install_log_file"
     exit 1
   fi
+  safe_remove_temp_file "$omz_install_log_file" "Oh My Zsh log file"
 }
 
 if ! command_exists "zsh"; then

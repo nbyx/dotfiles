@@ -321,9 +321,73 @@ function manage_config_block() {
     return 0
 }
 
+create_temp_file() {
+    local description="${1:-"temp file"}"
+    local temp_file
+    temp_file=$(mktemp)
+    
+    if [[ -z "$temp_file" || ! -f "$temp_file" ]]; then
+        log_error "FATAL: mktemp fehlgeschlagen für $description"
+        return 1
+    fi
+    
+    echo "$temp_file"
+}
+
+safe_remove_temp_file() {
+    local temp_file="$1"
+    local description="${2:-"temp file"}"
+    
+    if [[ -z "$temp_file" ]]; then
+        log_warn "Keine Temp-Datei zum Löschen angegeben für $description"
+        return 0
+    fi
+    
+    local system_tmp_dir
+    system_tmp_dir=$(dirname "$(mktemp -u)")
+    
+    if [[ -n "$temp_file" && -f "$temp_file" && "$temp_file" =~ ^"$system_tmp_dir"/ ]]; then
+        rm -f "$temp_file"
+        return 0
+    else
+        log_error "Warnung: Temp-Datei '$temp_file' für '$description' liegt nicht im erwarteten Temp-Verzeichnis '$system_tmp_dir' oder existiert nicht."
+        return 1
+    fi
+}
+
+with_temp_file() {
+    local description="$1"
+    local callback_function="$2"
+    
+    if [[ -z "$callback_function" ]]; then
+        log_error "with_temp_file benötigt eine Callback-Funktion"
+        return 1
+    fi
+    
+    local temp_file
+    temp_file=$(create_temp_file "$description")
+    local create_result=$?
+    
+    if [[ $create_result -ne 0 ]]; then
+        return $create_result
+    fi
+    
+    "$callback_function" "$temp_file"
+    local callback_result=$?
+    
+    safe_remove_temp_file "$temp_file" "$description"
+    
+    return $callback_result
+}
+
+function pkg_setup_shell_config() {
+    return 0
+}
+
 PM_NAME=""
 
 pkg_init=""
+pkg_setup_shell_config=""
 pkg_is_installed=""
 pkg_install=""
 pkg_uninstall=""

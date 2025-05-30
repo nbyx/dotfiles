@@ -56,10 +56,24 @@ function pm_brew_init() {
     if ! pm_brew_install_self_if_needed; then
         return 1
     fi
-    if ! pm_brew_setup_environment; then
-        log_warn "Einrichtung der Homebrew-Umgebung (shellenv) nicht vollständig erfolgreich."
+
+    if [[ "${DRY_RUN:-false}" == false ]]; then
+        local brew_exe_path_init
+        if [[ -x "/opt/homebrew/bin/brew" ]]; then brew_exe_path_init="/opt/homebrew/bin/brew";
+        elif [[ -x "/usr/local/bin/brew" ]]; then brew_exe_path_init="/usr/local/bin/brew";
+        elif command_exists "brew"; then brew_exe_path_init=$(command -v brew);
+        else brew_exe_path_init=""; fi
+
+        if [[ -n "$brew_exe_path_init" ]]; then
+            log_info "Aktiviere Homebrew für die aktuelle Installer-Sitzung..."
+            if ! eval "$($brew_exe_path_init shellenv)"; then
+                log_warn "Konnte Homebrew nicht vollständig für die aktuelle Shell-Sitzung aktivieren (eval shellenv fehlgeschlagen)."
+            fi
+        else
+            log_warn "brew Kommando nicht im PATH nach potenzieller Installation in pm_brew_init."
+        fi
     fi
-    log_info "Homebrew Paketmanager-Treiber initialisiert und Umgebung eingerichtet."
+    log_info "Homebrew Paketmanager-Treiber initialisiert (Bereit für Tool-Installationen)."
     return 0
 }
 
@@ -159,5 +173,6 @@ export pkg_uninstall="pm_brew_uninstall"
 export pkg_update_index="pm_brew_update_index"
 export pkg_update_all="pm_brew_update_all"
 export pkg_autoremove="pm_brew_autoremove"
+export pkg_setup_shell_config="pm_brew_setup_environment"
 
 export PM_NAME="Homebrew"
